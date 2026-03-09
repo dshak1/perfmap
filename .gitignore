@@ -1,0 +1,24 @@
+# Build directories
+build/
+cmake-build-*/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Compiled
+*.o
+*.a
+*.so
+*.dylib
+
+# Benchmark output
+results.json
+*.json
+
+# OS
+.DS_Store
+Thumbs.db
