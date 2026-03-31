@@ -56,6 +56,8 @@ target_include_directories(perfmap INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(perfmap INTERFACE
+  absl::flat_hash_map
+  absl::node_hash_map
   absl::status
   absl::statusor
 )
@@ -66,6 +68,9 @@ target_link_libraries(perfmap INTERFACE
 enable_testing()
 
 add_executable(perfmap_tests
+  tests/hash_map_contract_test.cc
+  tests/scratch_hash_map_test.cc
+  tests/scratch_indirect_hash_map_test.cc
   tests/hash_map_test.cc
 )
 target_link_libraries(perfmap_tests PRIVATE
@@ -88,14 +93,30 @@ target_link_libraries(perfmap_bench PRIVATE
   benchmark::benchmark_main
 )
 
+# "Where We Lose" — adversarial benchmarks showing STL's strengths
+add_executable(perfmap_tradeoffs
+  bench/tradeoffs_bench.cc
+)
+target_link_libraries(perfmap_tradeoffs PRIVATE
+  perfmap
+  benchmark::benchmark
+  benchmark::benchmark_main
+)
+
 # Optimize benchmarks for release by default.
 # -march=native lets the compiler use all available instructions on this CPU.
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
   target_compile_options(perfmap_bench PRIVATE
     $<$<CONFIG:Release>:-O2 -march=native>
   )
+  target_compile_options(perfmap_tradeoffs PRIVATE
+    $<$<CONFIG:Release>:-O2 -march=native>
+  )
 else()
   target_compile_options(perfmap_bench PRIVATE
+    $<$<CONFIG:Release>:-O2 -mcpu=native>
+  )
+  target_compile_options(perfmap_tradeoffs PRIVATE
     $<$<CONFIG:Release>:-O2 -mcpu=native>
   )
 endif()

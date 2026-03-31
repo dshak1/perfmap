@@ -1,246 +1,472 @@
 // Copyright 2026 SFU GDSC — PerfMap Workshop
 //
-// Benchmarks comparing PerfMap's HashMap against std::unordered_map.
+// Implementation-agnostic hash map benchmarks.
 //
-// Run:
-//   ./perfmap_bench                          # console output
-//   ./perfmap_bench --benchmark_out=results.json --benchmark_out_format=json
-//
-// Key insight for students:
-//   Our open-addressing map stores everything in a flat array.
-//   std::unordered_map uses separate chaining (linked-list buckets).
-//   On modern CPUs, cache locality from contiguous storage can dominate
-//   the algorithmic cost — that's what we're measuring here.
+// Fairness rules:
+//   1. Every implementation sees the exact same deterministic key sets.
+//   2. Insert benchmarks use unique keys only (no accidental upserts).
+//   3. Lookup benchmarks use a pointer-returning fast path for every map.
+//   4. Setup is excluded from steady-state lookup / erase timing.
+//   5. "reserved" benchmarks pre-size every map through the same adapter API.
 
 #include <benchmark/benchmark.h>
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <numeric>
 #include <random>
 #include <string>
-#include <unordered_map>
+#include <vector>
 
-#include "perfmap/hash_map.h"
+#include "perfmap/map_adapters.h"
 
-// Suppress [[nodiscard]] warnings in benchmark setup code.
-#define PERFMAP_IGNORE_STATUS(expr) (void)(expr)
+namespace perfmap {
+namespace {
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
-// Deterministic sequence of keys so benchmarks are reproducible.
-static std::vector<int> GenerateKeys(int count) {
-  std::mt19937 rng(42);  // Fixed seed for reproducibility
+std::vector<int> GenerateUniqueKeys(size_t count, uint32_t seed, int base) {
   std::vector<int> keys(count);
-  for (int i = 0; i < count; ++i) {
-    keys[i] = static_cast<int>(rng());
-  }
+  std::iota(keys.begin(), keys.end(), base);
+  std::mt19937 rng(seed);
+  std::shuffle(keys.begin(), keys.end(), rng);
   return keys;
 }
 
-// =============================================================================
-// INSERT benchmarks
-// =============================================================================
+struct WorkloadData {
+  std::vector<int> insert_keys;
+  std::vector<int> hit_keys;
+  std::vector<int> miss_keys;
+  std::vector<int> mixed_lookup_keys;
+  std::vector<int> mixed_erase_keys;
+  std::vector<int> churn_replacement_keys;
+};
 
-static void BM_StdUnorderedMap_Insert(benchmark::State& state) {
-  auto keys = GenerateKeys(static_cast<int>(state.range(0)));
-  for (auto _ : state) {
-    std::unordered_map<int, int> map;
-    map.reserve(keys.size());
-    for (size_t i = 0; i < keys.size(); ++i) {
-      map[keys[i]] = static_cast<int>(i);
-    }
-    benchmark::DoNotOptimize(map);
-  }
-  state.SetItemsProcessed(state.iterations() * state.range(0));
+struct LargeValue {
+  std::array<uint64_t, 128> words{};
+};
+
+WorkloadData MakeWorkloadData(size_t size) {
+  WorkloadData data;
+  data.insert_keys = GenerateUniqueKeys(size, /*seed=*/42, /*base=*/0);
+  data.hit_keys = data.insert_keys;
+  std::mt19937 hit_rng(77);
+  std::shuffle(data.hit_keys.begin(), data.hit_keys.end(), hit_rng);
+
+  data.miss_keys = GenerateUniqueKeys(size, /*seed=*/999,
+                                      /*base=*/static_cast<int>(size * 4));
+
+  const size_t initial_count = size / 2;
+  data.mixed_lookup_keys.assign(data.hit_keys.begin(),
+                                data.hit_keys.begin() + initial_count);
+  data.mixed_erase_keys.assign(data.insert_keys.begin(),
+                               data.insert_keys.begin() + size / 10);
+  data.churn_replacement_keys =
+      GenerateUniqueKeys(size * 3, /*seed=*/2024,
+                         /*base=*/static_cast<int>(size * 8));
+  return data;
 }
-BENCHMARK(BM_StdUnorderedMap_Insert)->Range(1 << 10, 1 << 18);
 
-static void BM_PerfMap_Insert(benchmark::State& state) {
-  auto keys = GenerateKeys(static_cast<int>(state.range(0)));
-  for (auto _ : state) {
-    perfmap::HashMap<int, int> map;
-    for (size_t i = 0; i < keys.size(); ++i) {
-      PERFMAP_IGNORE_STATUS(map.Insert(keys[i], static_cast<int>(i)));
-    }
-    benchmark::DoNotOptimize(map);
+template <typename Adapter>
+void FillMap(Adapter& map, const std::vector<int>& keys) {
+  map.Reserve(keys.size());
+  for (size_t i = 0; i < keys.size(); ++i) {
+    map.InsertOrAssign(keys[i], static_cast<int>(i));
   }
-  state.SetItemsProcessed(state.iterations() * state.range(0));
 }
-BENCHMARK(BM_PerfMap_Insert)->Range(1 << 10, 1 << 18);
 
-// =============================================================================
-// LOOKUP benchmarks  (search for keys that exist)
-// =============================================================================
+template <typename Adapter>
+void RunInsertGrow(benchmark::State& state) {
+  const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
 
-static void BM_StdUnorderedMap_Find(benchmark::State& state) {
-  auto keys = GenerateKeys(static_cast<int>(state.range(0)));
-  std::unordered_map<int, int> map;
-  map.reserve(keys.size());
-  for (size_t i = 0; i < keys.size(); ++i) {
-    map[keys[i]] = static_cast<int>(i);
-  }
-  // Lookup every key once per iteration
   for (auto _ : state) {
-    for (const auto& key : keys) {
-      benchmark::DoNotOptimize(map.find(key));
+    Adapter map;
+    for (size_t i = 0; i < data.insert_keys.size(); ++i) {
+      map.InsertOrAssign(data.insert_keys[i], static_cast<int>(i));
     }
+    benchmark::DoNotOptimize(map.Size());
+    benchmark::ClobberMemory();
   }
-  state.SetItemsProcessed(state.iterations() * state.range(0));
+
+  state.SetItemsProcessed(state.iterations() * data.insert_keys.size());
 }
-BENCHMARK(BM_StdUnorderedMap_Find)->Range(1 << 10, 1 << 18);
 
-static void BM_PerfMap_Find(benchmark::State& state) {
-  auto keys = GenerateKeys(static_cast<int>(state.range(0)));
-  perfmap::HashMap<int, int> map;
-  for (size_t i = 0; i < keys.size(); ++i) {
-    PERFMAP_IGNORE_STATUS(map.Insert(keys[i], static_cast<int>(i)));
-  }
-  for (auto _ : state) {
-    for (const auto& key : keys) {
-      benchmark::DoNotOptimize(map.Find(key));
-    }
-  }
-  state.SetItemsProcessed(state.iterations() * state.range(0));
-}
-BENCHMARK(BM_PerfMap_Find)->Range(1 << 10, 1 << 18);
+template <typename Adapter>
+void RunInsertReserved(benchmark::State& state) {
+  const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
 
-// =============================================================================
-// LOOKUP benchmarks  (search for keys that do NOT exist — miss path)
-// =============================================================================
-
-static void BM_StdUnorderedMap_FindMiss(benchmark::State& state) {
-  auto keys = GenerateKeys(static_cast<int>(state.range(0)));
-  std::unordered_map<int, int> map;
-  map.reserve(keys.size());
-  for (size_t i = 0; i < keys.size(); ++i) {
-    map[keys[i]] = static_cast<int>(i);
-  }
-  // Lookup keys that are very unlikely to exist
-  std::vector<int> miss_keys(keys.size());
-  for (size_t i = 0; i < keys.size(); ++i) {
-    miss_keys[i] = -static_cast<int>(i) - 1;
-  }
-  for (auto _ : state) {
-    for (const auto& key : miss_keys) {
-      benchmark::DoNotOptimize(map.find(key));
-    }
-  }
-  state.SetItemsProcessed(state.iterations() * state.range(0));
-}
-BENCHMARK(BM_StdUnorderedMap_FindMiss)->Range(1 << 10, 1 << 18);
-
-static void BM_PerfMap_FindMiss(benchmark::State& state) {
-  auto keys = GenerateKeys(static_cast<int>(state.range(0)));
-  perfmap::HashMap<int, int> map;
-  for (size_t i = 0; i < keys.size(); ++i) {
-    PERFMAP_IGNORE_STATUS(map.Insert(keys[i], static_cast<int>(i)));
-  }
-  std::vector<int> miss_keys(keys.size());
-  for (size_t i = 0; i < keys.size(); ++i) {
-    miss_keys[i] = -static_cast<int>(i) - 1;
-  }
-  for (auto _ : state) {
-    for (const auto& key : miss_keys) {
-      benchmark::DoNotOptimize(map.Find(key));
-    }
-  }
-  state.SetItemsProcessed(state.iterations() * state.range(0));
-}
-BENCHMARK(BM_PerfMap_FindMiss)->Range(1 << 10, 1 << 18);
-
-// =============================================================================
-// ERASE benchmarks
-// =============================================================================
-
-static void BM_StdUnorderedMap_Erase(benchmark::State& state) {
-  auto keys = GenerateKeys(static_cast<int>(state.range(0)));
   for (auto _ : state) {
     state.PauseTiming();
-    std::unordered_map<int, int> map;
-    map.reserve(keys.size());
-    for (size_t i = 0; i < keys.size(); ++i) {
-      map[keys[i]] = static_cast<int>(i);
-    }
+    Adapter map;
+    map.Reserve(data.insert_keys.size());
     state.ResumeTiming();
-    for (const auto& key : keys) {
-      map.erase(key);
-    }
-    benchmark::DoNotOptimize(map);
-  }
-  state.SetItemsProcessed(state.iterations() * state.range(0));
-}
-BENCHMARK(BM_StdUnorderedMap_Erase)->Range(1 << 10, 1 << 16);
 
-static void BM_PerfMap_Erase(benchmark::State& state) {
-  auto keys = GenerateKeys(static_cast<int>(state.range(0)));
+    for (size_t i = 0; i < data.insert_keys.size(); ++i) {
+      map.InsertOrAssign(data.insert_keys[i], static_cast<int>(i));
+    }
+    benchmark::DoNotOptimize(map.Size());
+    benchmark::ClobberMemory();
+  }
+
+  state.SetItemsProcessed(state.iterations() * data.insert_keys.size());
+}
+
+template <typename Adapter>
+void RunFindHit(benchmark::State& state) {
+  const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
+  Adapter map;
+  FillMap(map, data.insert_keys);
+
+  uint64_t value_sum = 0;
+  for (auto _ : state) {
+    for (const int key : data.hit_keys) {
+      const int* value = map.FindPtr(key);
+      benchmark::DoNotOptimize(value);
+      value_sum += (value != nullptr) ? static_cast<uint64_t>(*value) : 0;
+    }
+  }
+
+  benchmark::DoNotOptimize(value_sum);
+  state.SetItemsProcessed(state.iterations() * data.hit_keys.size());
+}
+
+template <typename Adapter>
+void RunFindMiss(benchmark::State& state) {
+  const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
+  Adapter map;
+  FillMap(map, data.insert_keys);
+
+  uint64_t miss_count = 0;
+  for (auto _ : state) {
+    for (const int key : data.miss_keys) {
+      const int* value = map.FindPtr(key);
+      benchmark::DoNotOptimize(value);
+      miss_count += (value == nullptr) ? 1u : 0u;
+    }
+  }
+
+  benchmark::DoNotOptimize(miss_count);
+  state.SetItemsProcessed(state.iterations() * data.miss_keys.size());
+}
+
+template <typename Adapter>
+void RunErase(benchmark::State& state) {
+  const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
+
   for (auto _ : state) {
     state.PauseTiming();
-    perfmap::HashMap<int, int> map;
-    for (size_t i = 0; i < keys.size(); ++i) {
-      PERFMAP_IGNORE_STATUS(map.Insert(keys[i], static_cast<int>(i)));
-    }
+    Adapter map;
+    FillMap(map, data.insert_keys);
     state.ResumeTiming();
-    for (const auto& key : keys) {
-      PERFMAP_IGNORE_STATUS(map.Erase(key));
+
+    size_t erased = 0;
+    for (const int key : data.insert_keys) {
+      erased += map.Erase(key) ? 1u : 0u;
     }
-    benchmark::DoNotOptimize(map);
+    benchmark::DoNotOptimize(erased);
+    benchmark::DoNotOptimize(map.Size());
   }
-  state.SetItemsProcessed(state.iterations() * state.range(0));
+
+  state.SetItemsProcessed(state.iterations() * data.insert_keys.size());
 }
-BENCHMARK(BM_PerfMap_Erase)->Range(1 << 10, 1 << 16);
 
-// =============================================================================
-// MIXED WORKLOAD — realistic: 50% insert, 40% lookup, 10% erase
-// =============================================================================
-
-static void BM_StdUnorderedMap_Mixed(benchmark::State& state) {
-  const int n = static_cast<int>(state.range(0));
-  auto keys = GenerateKeys(n);
+template <typename Adapter>
+void RunMixed(benchmark::State& state) {
+  const size_t size = static_cast<size_t>(state.range(0));
+  const auto data = MakeWorkloadData(size);
+  const size_t initial_count = size / 2;
+  const size_t lookup_count = size * 2 / 5;
+  const size_t erase_count = size / 10;
 
   for (auto _ : state) {
-    std::unordered_map<int, int> map;
-    map.reserve(n);
+    Adapter map;
+    map.Reserve(size);
 
-    // Insert half
-    for (int i = 0; i < n / 2; ++i) {
-      map[keys[i]] = i;
+    for (size_t i = 0; i < initial_count; ++i) {
+      map.InsertOrAssign(data.insert_keys[i], static_cast<int>(i));
     }
-    // Lookup 40%
-    for (int i = 0; i < n * 2 / 5; ++i) {
-      benchmark::DoNotOptimize(map.find(keys[i % (n / 2)]));
+
+    uint64_t value_sum = 0;
+    for (size_t i = 0; i < lookup_count; ++i) {
+      const int* value =
+          map.FindPtr(data.mixed_lookup_keys[i % data.mixed_lookup_keys.size()]);
+      benchmark::DoNotOptimize(value);
+      value_sum += (value != nullptr) ? static_cast<uint64_t>(*value) : 0;
     }
-    // Erase 10%
-    for (int i = 0; i < n / 10; ++i) {
-      map.erase(keys[i]);
+
+    size_t erased = 0;
+    for (size_t i = 0; i < erase_count; ++i) {
+      erased += map.Erase(data.mixed_erase_keys[i]) ? 1u : 0u;
     }
-    benchmark::DoNotOptimize(map);
+
+    benchmark::DoNotOptimize(value_sum);
+    benchmark::DoNotOptimize(erased);
+    benchmark::DoNotOptimize(map.Size());
   }
-  state.SetItemsProcessed(state.iterations() * n);
-}
-BENCHMARK(BM_StdUnorderedMap_Mixed)->Range(1 << 10, 1 << 17);
 
-static void BM_PerfMap_Mixed(benchmark::State& state) {
-  const int n = static_cast<int>(state.range(0));
-  auto keys = GenerateKeys(n);
+  state.SetItemsProcessed(
+      state.iterations() * static_cast<int64_t>(initial_count + lookup_count +
+                                                erase_count));
+}
+
+template <typename Adapter>
+void RunChurn(benchmark::State& state) {
+  const size_t size = static_cast<size_t>(state.range(0));
+  const auto data = MakeWorkloadData(size);
 
   for (auto _ : state) {
-    perfmap::HashMap<int, int> map;
+    Adapter map;
+    map.Reserve(size);
+    std::vector<int> live_keys = data.insert_keys;
 
-    // Insert half
-    for (int i = 0; i < n / 2; ++i) {
-      PERFMAP_IGNORE_STATUS(map.Insert(keys[i], i));
+    for (size_t i = 0; i < size; ++i) {
+      map.InsertOrAssign(live_keys[i], static_cast<int>(i));
     }
-    // Lookup 40%
-    for (int i = 0; i < n * 2 / 5; ++i) {
-      benchmark::DoNotOptimize(map.Find(keys[i % (n / 2)]));
+
+    uint64_t value_sum = 0;
+    for (size_t round = 0; round < 3; ++round) {
+      for (size_t i = 0; i < size; ++i) {
+        const int old_key = live_keys[i];
+        const int new_key = data.churn_replacement_keys[round * size + i];
+
+        benchmark::DoNotOptimize(map.Erase(old_key));
+        map.InsertOrAssign(new_key, static_cast<int>(round * size + i));
+
+        const int* value = map.FindPtr(new_key);
+        benchmark::DoNotOptimize(value);
+        value_sum += (value != nullptr) ? static_cast<uint64_t>(*value) : 0;
+        live_keys[i] = new_key;
+      }
     }
-    // Erase 10%
-    for (int i = 0; i < n / 10; ++i) {
-      PERFMAP_IGNORE_STATUS(map.Erase(keys[i]));
-    }
-    benchmark::DoNotOptimize(map);
+
+    benchmark::DoNotOptimize(value_sum);
+    benchmark::DoNotOptimize(map.Size());
   }
-  state.SetItemsProcessed(state.iterations() * n);
+
+  state.SetItemsProcessed(state.iterations() *
+                          static_cast<int64_t>(size * 3 * 3));
 }
-BENCHMARK(BM_PerfMap_Mixed)->Range(1 << 10, 1 << 17);
+
+template <typename Adapter>
+void RegisterBenchmarksForAdapter() {
+  const std::string prefix(Adapter::kBenchmarkName);
+
+  benchmark::RegisterBenchmark((prefix + "/insert_grow").c_str(),
+                               &RunInsertGrow<Adapter>)
+      ->RangeMultiplier(2)
+      ->Range(1 << 10, 1 << 18);
+
+  benchmark::RegisterBenchmark((prefix + "/insert_reserved").c_str(),
+                               &RunInsertReserved<Adapter>)
+      ->RangeMultiplier(2)
+      ->Range(1 << 10, 1 << 18);
+
+  benchmark::RegisterBenchmark((prefix + "/find_hit").c_str(),
+                               &RunFindHit<Adapter>)
+      ->RangeMultiplier(2)
+      ->Range(1 << 10, 1 << 18);
+
+  benchmark::RegisterBenchmark((prefix + "/find_miss").c_str(),
+                               &RunFindMiss<Adapter>)
+      ->RangeMultiplier(2)
+      ->Range(1 << 10, 1 << 18);
+
+  benchmark::RegisterBenchmark((prefix + "/erase").c_str(), &RunErase<Adapter>)
+      ->RangeMultiplier(2)
+      ->Range(1 << 10, 1 << 16);
+
+  benchmark::RegisterBenchmark((prefix + "/mixed").c_str(), &RunMixed<Adapter>)
+      ->RangeMultiplier(2)
+      ->Range(1 << 10, 1 << 17);
+
+  benchmark::RegisterBenchmark((prefix + "/churn").c_str(), &RunChurn<Adapter>)
+      ->RangeMultiplier(2)
+      ->Range(1 << 10, 1 << 16);
+}
+
+template <typename Adapter>
+void RunLargeValueFindHit(benchmark::State& state) {
+  const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
+  Adapter map;
+  map.Reserve(data.insert_keys.size());
+
+  LargeValue value;
+  for (size_t i = 0; i < data.insert_keys.size(); ++i) {
+    value.words[0] = static_cast<uint64_t>(i);
+    value.words[127] = static_cast<uint64_t>(i * 3);
+    map.InsertOrAssign(data.insert_keys[i], value);
+  }
+
+  uint64_t checksum = 0;
+  for (auto _ : state) {
+    for (const int key : data.hit_keys) {
+      const LargeValue* result = map.FindPtr(key);
+      benchmark::DoNotOptimize(result);
+      checksum += (result != nullptr) ? result->words[0] : 0;
+    }
+  }
+
+  benchmark::DoNotOptimize(checksum);
+  state.SetItemsProcessed(state.iterations() * data.hit_keys.size());
+}
+
+template <typename Adapter>
+void RunLargeValueFindMiss(benchmark::State& state) {
+  const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
+  Adapter map;
+  map.Reserve(data.insert_keys.size());
+
+  LargeValue value;
+  for (size_t i = 0; i < data.insert_keys.size(); ++i) {
+    value.words[0] = static_cast<uint64_t>(i);
+    value.words[127] = static_cast<uint64_t>(i * 7);
+    map.InsertOrAssign(data.insert_keys[i], value);
+  }
+
+  uint64_t misses = 0;
+  for (auto _ : state) {
+    for (const int key : data.miss_keys) {
+      const LargeValue* result = map.FindPtr(key);
+      benchmark::DoNotOptimize(result);
+      misses += (result == nullptr) ? 1u : 0u;
+    }
+  }
+
+  benchmark::DoNotOptimize(misses);
+  state.SetItemsProcessed(state.iterations() * data.miss_keys.size());
+}
+
+template <typename Adapter>
+void RegisterLargeValueBenchmarksForAdapter() {
+  const std::string prefix(Adapter::kBenchmarkName);
+
+  benchmark::RegisterBenchmark((prefix + "/large_value_find_hit").c_str(),
+                               &RunLargeValueFindHit<Adapter>)
+      ->RangeMultiplier(2)
+      ->Range(1 << 10, 1 << 16);
+
+  benchmark::RegisterBenchmark((prefix + "/large_value_find_miss").c_str(),
+                               &RunLargeValueFindMiss<Adapter>)
+      ->RangeMultiplier(2)
+      ->Range(1 << 10, 1 << 16);
+}
+
+template <typename Adapter>
+void RunScratchCycle(benchmark::State& state) {
+  const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
+  Adapter map;
+  map.Reserve(data.insert_keys.size());
+
+  uint64_t checksum = 0;
+  for (auto _ : state) {
+    map.Clear();
+
+    for (size_t i = 0; i < data.insert_keys.size(); ++i) {
+      map.InsertOrAssign(data.insert_keys[i], static_cast<int>(i));
+    }
+
+    for (const int key : data.hit_keys) {
+      const int* value = map.FindPtr(key);
+      benchmark::DoNotOptimize(value);
+      checksum += (value != nullptr) ? static_cast<uint64_t>(*value) : 0;
+    }
+  }
+
+  benchmark::DoNotOptimize(checksum);
+  state.SetItemsProcessed(state.iterations() *
+                          static_cast<int64_t>(data.insert_keys.size() * 2));
+}
+
+template <typename Adapter>
+void RegisterScratchBenchmarksForAdapter() {
+  const std::string prefix(Adapter::kBenchmarkName);
+  benchmark::RegisterBenchmark((prefix + "/scratch_cycle").c_str(),
+                               &RunScratchCycle<Adapter>)
+      ->RangeMultiplier(2)
+      ->Range(1 << 10, 1 << 17);
+}
+
+template <typename Adapter>
+void RunLargeValueScratchCycle(benchmark::State& state) {
+  const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
+  Adapter map;
+  map.Reserve(data.insert_keys.size());
+
+  uint64_t checksum = 0;
+  for (auto _ : state) {
+    map.Clear();
+
+    LargeValue value;
+    for (size_t i = 0; i < data.insert_keys.size(); ++i) {
+      value.words[0] = static_cast<uint64_t>(i);
+      value.words[127] = static_cast<uint64_t>(i * 11);
+      map.InsertOrAssign(data.insert_keys[i], value);
+    }
+
+    for (const int key : data.hit_keys) {
+      const LargeValue* result = map.FindPtr(key);
+      benchmark::DoNotOptimize(result);
+      checksum += (result != nullptr) ? result->words[0] : 0;
+    }
+  }
+
+  benchmark::DoNotOptimize(checksum);
+  state.SetItemsProcessed(state.iterations() *
+                          static_cast<int64_t>(data.insert_keys.size() * 2));
+}
+
+template <typename Adapter>
+void RegisterLargeValueScratchBenchmarksForAdapter() {
+  const std::string prefix(Adapter::kBenchmarkName);
+  benchmark::RegisterBenchmark((prefix + "/large_value_scratch_cycle").c_str(),
+                               &RunLargeValueScratchCycle<Adapter>)
+      ->RangeMultiplier(2)
+      ->Range(1 << 10, 1 << 16);
+}
+
+using StdAdapter = adapters::StdUnorderedMapAdapter<int, int>;
+using AbslAdapter = adapters::AbslFlatHashMapAdapter<int, int>;
+using PerfMapBalancedAdapter = adapters::PerfMapAdapter<int, int>;
+using PerfMapReadHeavyAdapter =
+    adapters::PerfMapAdapter<int, int, ReadHeavyPolicy>;
+using PerfMapChurnHeavyAdapter =
+    adapters::PerfMapAdapter<int, int, ChurnHeavyPolicy>;
+using PerfMapSpaceEfficientAdapter =
+    adapters::PerfMapAdapter<int, int, SpaceEfficientPolicy>;
+using StdLargeValueAdapter = adapters::StdUnorderedMapAdapter<int, LargeValue>;
+using AbslLargeValueAdapter =
+    adapters::AbslFlatHashMapAdapter<int, LargeValue>;
+using AbslNodeLargeValueAdapter =
+    adapters::AbslNodeHashMapAdapter<int, LargeValue>;
+using PerfMapLargeValueAdapter =
+    adapters::PerfMapAdapter<int, LargeValue>;
+using PerfMapIndirectLargeValueAdapter =
+    adapters::PerfMapIndirectAdapter<int, LargeValue>;
+using ScratchAdapter = adapters::PerfMapScratchAdapter<int, int>;
+using ScratchIndirectLargeValueAdapter =
+    adapters::PerfMapScratchIndirectAdapter<int, LargeValue>;
+
+const bool kRegistered = [] {
+  RegisterBenchmarksForAdapter<StdAdapter>();
+  RegisterBenchmarksForAdapter<AbslAdapter>();
+  RegisterBenchmarksForAdapter<PerfMapBalancedAdapter>();
+  RegisterBenchmarksForAdapter<PerfMapReadHeavyAdapter>();
+  RegisterBenchmarksForAdapter<PerfMapChurnHeavyAdapter>();
+  RegisterBenchmarksForAdapter<PerfMapSpaceEfficientAdapter>();
+  RegisterLargeValueBenchmarksForAdapter<StdLargeValueAdapter>();
+  RegisterLargeValueBenchmarksForAdapter<AbslLargeValueAdapter>();
+  RegisterLargeValueBenchmarksForAdapter<AbslNodeLargeValueAdapter>();
+  RegisterLargeValueBenchmarksForAdapter<PerfMapLargeValueAdapter>();
+  RegisterLargeValueBenchmarksForAdapter<PerfMapIndirectLargeValueAdapter>();
+  RegisterScratchBenchmarksForAdapter<StdAdapter>();
+  RegisterScratchBenchmarksForAdapter<AbslAdapter>();
+  RegisterScratchBenchmarksForAdapter<ScratchAdapter>();
+  RegisterLargeValueScratchBenchmarksForAdapter<StdLargeValueAdapter>();
+  RegisterLargeValueScratchBenchmarksForAdapter<AbslLargeValueAdapter>();
+  RegisterLargeValueScratchBenchmarksForAdapter<AbslNodeLargeValueAdapter>();
+  RegisterLargeValueScratchBenchmarksForAdapter<ScratchIndirectLargeValueAdapter>();
+  return true;
+}();
+
+}  // namespace
+}  // namespace perfmap

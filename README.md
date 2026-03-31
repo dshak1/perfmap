@@ -27,6 +27,19 @@ make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
 ./perfmap_bench
 ```
 
+The benchmark suite compares standard baselines plus workload-tuned PerfMap
+variants through one shared adapter contract:
+
+- `std::unordered_map`
+- `absl::flat_hash_map`
+- `perfmap::HashMap` (balanced)
+- `perfmap::ReadHeavyHashMap`
+- `perfmap::ChurnHeavyHashMap`
+- `perfmap::SpaceEfficientHashMap`
+- `perfmap::IndirectHashMap` for large payloads
+- `perfmap::ScratchHashMap` for repeated clear/rebuild cycles
+- `perfmap::ScratchIndirectHashMap` for large payloads plus repeated rebuilds
+
 ## What You'll Learn
 
 - **Hash table internals:** open addressing, linear probing, tombstones, rehashing
@@ -47,9 +60,11 @@ perfmap/
 │       ├── slot.h              # SlotState enum + Slot<K,V> struct
 │       └── hash_map.h          # The hash map implementation
 ├── bench/
-│   └── hash_map_bench.cc       # Benchmarks: PerfMap vs std::unordered_map
+│   ├── hash_map_bench.cc       # Adapter-driven benchmarks for any map implementation
+│   └── tradeoffs_bench.cc      # Adversarial benchmarks: where STL wins
 ├── tests/
-│   └── hash_map_test.cc        # Google Test correctness suite
+│   ├── hash_map_contract_test.cc  # Implementation-agnostic correctness contract
+│   └── hash_map_test.cc           # PerfMap-specific correctness + internals
 └── docs/
     ├── DESIGN.md               # Your design rationale (fill this in!)
     └── RESULTS.md              # Your benchmark results (fill this in!)
@@ -89,6 +104,20 @@ After the workshop, pick a direction and make it yours:
 | **Visualization** | Python script to plot benchmark JSON as charts | Medium |
 | **Distributed** | Wrap as a gRPC key-value store service | Advanced |
 | **Data Structures** | Extend to LRU cache, skip list, or B-tree | Medium |
+
+## Benchmark Fairness
+
+The generic benchmark harness is intentionally strict:
+
+- All implementations receive the same deterministic, unique key sets.
+- Lookup benchmarks use pointer-returning fast paths for every map.
+- Steady-state lookup and erase benchmarks exclude setup cost.
+- Reserved benchmarks pre-size every map through the same `Reserve()` adapter.
+
+To add another map implementation, define a new adapter in
+`include/perfmap/map_adapters.h` with `Reserve`, `InsertOrAssign`, `FindPtr`,
+`Contains`, `Erase`, `Size`, and `Empty`, then register it in
+`bench/hash_map_bench.cc`.
 
 ## Google Style C++ Cheat Sheet
 

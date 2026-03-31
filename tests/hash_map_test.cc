@@ -176,8 +176,9 @@ TEST(HashMapTest, RehashCleansUpTombstones) {
 // =========================================================================
 
 TEST(HashMapTest, LoadFactorIsCorrect) {
-  HashMap<int, int> map(100);
-  for (int i = 0; i < 50; ++i) {
+  // Capacity is always rounded up to a power of two, so use 128 directly.
+  HashMap<int, int> map(128);
+  for (int i = 0; i < 64; ++i) {
     PERFMAP_IGNORE_STATUS(map.Insert(i, i));
   }
   EXPECT_NEAR(map.load_factor(), 0.5, 0.01);
@@ -191,6 +192,39 @@ TEST(HashMapTest, AutoRehashKeepsLoadFactorBelowThreshold) {
   // After many inserts, load factor should still be managed
   EXPECT_LE(map.load_factor(), 0.75);  // small margin above 0.7
   EXPECT_EQ(map.size(), 1000);
+}
+
+TEST(HashMapTest, ReserveCreatesEnoughCapacityForExpectedSize) {
+  HashMap<int, int> map(4);
+  map.Reserve(1000);
+
+  EXPECT_GE(map.capacity(), 1000u);
+  EXPECT_LE(1000.0 / static_cast<double>(map.capacity()), 0.71);
+}
+
+TEST(HashMapTest, WorkloadPoliciesChangeReserveCapacity) {
+  {
+    HashMap<int, int> balanced(4);
+    ReadHeavyHashMap<int, int> read_heavy(4);
+
+    balanced.Reserve(1100);
+    read_heavy.Reserve(1100);
+
+    EXPECT_GT(read_heavy.capacity(), balanced.capacity());
+  }
+
+  {
+    HashMap<int, int> balanced(4);
+    ChurnHeavyHashMap<int, int> churn_heavy(4);
+    SpaceEfficientHashMap<int, int> space_efficient(4);
+
+    balanced.Reserve(1500);
+    churn_heavy.Reserve(1500);
+    space_efficient.Reserve(1500);
+
+    EXPECT_GE(churn_heavy.capacity(), balanced.capacity());
+    EXPECT_LT(space_efficient.capacity(), balanced.capacity());
+  }
 }
 
 // =========================================================================

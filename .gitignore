@@ -22,3 +22,7 @@ results.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Workshop local cache
+workshop/.cache/
+workshop/.mpl-cache/
