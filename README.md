@@ -1,136 +1,182 @@
 # PerfMap — A Cache-Aware Hash Map Performance Engineering Lab
 
-> SFU GDSC Workshop | March 10, 2026
+> SFU GDSC Workshop | March 31, 2026
 >
-> Build, test, benchmark, and optimize a custom hash map using Google's
-> open-source toolchain — then prove it's faster than `std::unordered_map`
-> with hard numbers.
-
----
+> Build, test, benchmark, and extend a custom hash map in C++17, then
+> explain exactly where it wins, where it loses, and why.
 
 ## Quick Start
 
 ```bash
-# Clone
 git clone <repo-url>
 cd perfmap
 
-# Build (Release mode for meaningful benchmarks)
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j8
 
-# Run tests (correctness first!)
-./perfmap_tests
-
-# Run benchmarks
-./perfmap_bench
+ctest --test-dir build --output-on-failure
+./build/perfmap_bench
 ```
 
-The benchmark suite compares standard baselines plus workload-tuned PerfMap
-variants through one shared adapter contract:
+## What This Repo Contains
+
+PerfMap is not just one container. The repo includes:
+
+- `perfmap::HashMap` as the balanced open-addressing baseline
+- workload-tuned variants for read-heavy, churn-heavy, and space-efficient use
+- `perfmap::IndirectHashMap` for large payloads
+- `perfmap::ScratchHashMap` for repeated clear/rebuild cycles
+- `perfmap::ScratchIndirectHashMap` for the strongest current niche:
+  large-value scratch/rebuild workloads
+
+The benchmark harness compares those variants against:
 
 - `std::unordered_map`
 - `absl::flat_hash_map`
-- `perfmap::HashMap` (balanced)
-- `perfmap::ReadHeavyHashMap`
-- `perfmap::ChurnHeavyHashMap`
-- `perfmap::SpaceEfficientHashMap`
-- `perfmap::IndirectHashMap` for large payloads
-- `perfmap::ScratchHashMap` for repeated clear/rebuild cycles
-- `perfmap::ScratchIndirectHashMap` for large payloads plus repeated rebuilds
+- `absl::node_hash_map`
 
-## What You'll Learn
+## Why This Project Exists
 
-- **Hash table internals:** open addressing, linear probing, tombstones, rehashing
-- **Performance engineering:** why cache locality beats algorithmic cleverness on modern CPUs
-- **Google-style C++:** `absl::StatusOr`, naming conventions, code structure
-- **Google tooling:** Google Test for correctness, Google Benchmark for measurement
-- **Engineering discipline:** "if you didn't measure it, you didn't optimize it"
+PerfMap came from two overlapping goals:
+
+- build something closer to what C++ systems and performance roles
+  actually care about
+- turn a familiar data structure into a project with measurable,
+  workload-specific evidence
+
+The idea was not just "write a hash map from scratch." The idea was to
+study how hash map design changes under real usage patterns like request
+dedup, batch-local caches, and other temporary lookup-heavy workloads.
+
+Project story and motivation:
+
+- [`docs/PROJECT_STORY.md`](./docs/PROJECT_STORY.md)
+
+## The Honest Performance Story
+
+The repo is intentionally honest:
+
+- the generic map can beat `std::unordered_map` on some locality-friendly
+  workloads
+- miss-heavy and broad large-value lookup cases still favor stronger baselines
+- the strongest current niche is large-value scratch/rebuild work, where
+  `ScratchIndirectHashMap` wins by a wide margin
+
+That is the point of the project. Good performance engineering means knowing
+when a design helps and when it does not.
 
 ## Project Structure
 
-```
+```text
 perfmap/
-├── CMakeLists.txt              # Build system — FetchContent pulls all deps
-├── .clang-format               # Google style auto-formatting
-├── .clang-tidy                 # Static analysis config
-├── include/
-│   └── perfmap/
-│       ├── slot.h              # SlotState enum + Slot<K,V> struct
-│       └── hash_map.h          # The hash map implementation
-├── bench/
-│   ├── hash_map_bench.cc       # Adapter-driven benchmarks for any map implementation
-│   └── tradeoffs_bench.cc      # Adversarial benchmarks: where STL wins
+├── CMakeLists.txt
+├── README.md
+├── include/perfmap/
+│   ├── slot.h
+│   ├── hash_map.h
+│   ├── indirect_hash_map.h
+│   ├── scratch_hash_map.h
+│   ├── scratch_indirect_hash_map.h
+│   └── map_adapters.h
 ├── tests/
-│   ├── hash_map_contract_test.cc  # Implementation-agnostic correctness contract
-│   └── hash_map_test.cc           # PerfMap-specific correctness + internals
-└── docs/
-    ├── DESIGN.md               # Your design rationale (fill this in!)
-    └── RESULTS.md              # Your benchmark results (fill this in!)
+│   ├── hash_map_contract_test.cc
+│   ├── hash_map_test.cc
+│   ├── scratch_hash_map_test.cc
+│   └── scratch_indirect_hash_map_test.cc
+├── bench/
+│   ├── hash_map_bench.cc
+│   └── tradeoffs_bench.cc
+├── docs/
+│   ├── DESIGN.md
+│   ├── RESULTS.md
+│   └── IDEAS.md
+├── workshop/
+│   ├── perfmap_workshop_deck.md
+│   ├── presentation_script.md
+│   ├── WORKSHOP_STATUS.md
+│   └── assets/
+└── starter/
+    └── perfmap-10d/
 ```
 
-## Dependencies (auto-fetched by CMake)
+## What You'll Learn
 
-| Library | What it does | Google? |
-|---------|-------------|---------|
-| [Google Test](https://github.com/google/googletest) | Unit testing framework | Yes |
-| [Google Benchmark](https://github.com/google/benchmark) | Microbenchmark harness | Yes |
-| [Abseil](https://github.com/abseil/abseil-cpp) | C++ standard library extensions | Yes |
+- open addressing, linear probing, and tombstone-aware deletion
+- why memory layout beats theory-only reasoning on modern CPUs
+- how tiny API choices affect benchmark results
+- how to build fair performance experiments
+- how to talk about a systems project in interviews without hand-waving
 
-## Requirements
+## Workshop Assets
 
-- **C++17** compiler (GCC 7+, Clang 5+, MSVC 2019+)
-- **CMake** 3.14+
-- **Git** (for FetchContent to pull dependencies)
-- Internet connection on first build (to download dependencies)
+- Presentation deck: [`workshop/perfmap_workshop_deck.md`](./workshop/perfmap_workshop_deck.md)
+- Speaker script: [`workshop/presentation_script.md`](./workshop/presentation_script.md)
+- Workshop audit/status sheet: [`workshop/WORKSHOP_STATUS.md`](./workshop/WORKSHOP_STATUS.md)
+- Attendee starter project: [`starter/perfmap-10d`](./starter/perfmap-10d)
 
-## Resume Bullet (Adapt This)
+## Workshop-Friendly Workloads
 
-> Engineered a cache-aware open-addressing hash map in C++, achieving X%
-> faster lookups than std::unordered_map — benchmarked with Google Benchmark,
-> tested with Google Test, built with Google-style conventions (absl::StatusOr,
-> linear probing, tombstone-aware deletion).
+These are the three easiest real-world stories to explain when presenting
+the repo:
 
-## Extension Ideas
+- request-scoped dedup / enrichment
+- per-batch document or metadata enrichment cache
+- graph traversal visited state
 
-After the workshop, pick a direction and make it yours:
+The strongest current win is the second one, because large values plus
+repeated clear/rebuild cycles are exactly where `ScratchIndirectHashMap`
+has a structural advantage.
 
-| Track | Ideas | Difficulty |
-|-------|-------|-----------|
-| **Performance** | Robin Hood hashing, SIMD probing, prefetch hints, custom allocator | Hard |
-| **Concurrency** | Mutex-guarded, sharded locks, lock-free SPSC | Hard |
-| **Engineering** | GitHub Actions CI, benchmark regression detection, ASan/TSan | Medium |
-| **Visualization** | Python script to plot benchmark JSON as charts | Medium |
-| **Distributed** | Wrap as a gRPC key-value store service | Advanced |
-| **Data Structures** | Extend to LRU cache, skip list, or B-tree | Medium |
+To rebuild the `.pptx` deck:
 
-## Benchmark Fairness
+```bash
+./workshop/build_deck.sh
+```
 
-The generic benchmark harness is intentionally strict:
+## Dependencies
 
-- All implementations receive the same deterministic, unique key sets.
-- Lookup benchmarks use pointer-returning fast paths for every map.
-- Steady-state lookup and erase benchmarks exclude setup cost.
-- Reserved benchmarks pre-size every map through the same `Reserve()` adapter.
+- C++17 compiler
+- CMake 3.14+
+- Git
+- Internet access on first configure for `FetchContent`
 
-To add another map implementation, define a new adapter in
-`include/perfmap/map_adapters.h` with `Reserve`, `InsertOrAssign`, `FindPtr`,
-`Contains`, `Erase`, `Size`, and `Empty`, then register it in
-`bench/hash_map_bench.cc`.
+Dependencies are fetched automatically:
 
-## Google Style C++ Cheat Sheet
+- Google Test
+- Google Benchmark
+- Abseil
 
-| Convention | Example |
-|-----------|---------|
-| 2-space indent | `if (x) {∙∙...` |
-| Types: CamelCase | `class HashMap`, `struct Slot` |
-| Functions: CamelCase | `void Insert(...)`, `size_t FindSlotIndex(...)` |
-| Variables: snake_case | `size_t table_size`, `int load_count` |
-| Private members: trailing _ | `size_t size_;`, `Hash hasher_;` |
-| Constants: k-prefix | `static constexpr double kMaxLoadFactor` |
-| Error handling | `absl::StatusOr<V>` not exceptions |
+## CI
+
+GitHub Actions now runs:
+
+- configure + build
+- full test suite
+- benchmark smoke checks for both the main benchmark harness and the
+  explicit tradeoff benchmarks
+
+Workflow:
+
+- [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
+
+## Good Extensions After The Workshop
+
+- automated benchmark reporting from JSON output
+- memory and probe-length instrumentation
+- benchmark regression history and dashboards
+- real trace-like workloads
+- Robin Hood hashing or metadata-byte probing
+- cloud or service wrappers only if they preserve the measurement story
+
+## Resume Framing
+
+Use language like this:
+
+> Built and benchmarked workload-aware hash map variants in C++17, including
+> indirect-storage and scratch-map specializations, and used Google Benchmark
+> plus Google Test to prove where the design outperformed standard baselines
+> and where it did not.
 
 ## License
 
-Educational project — SFU GDSC 2026. Use freely.
+Educational project for SFU GDSC 2026. Use freely.

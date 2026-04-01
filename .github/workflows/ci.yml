@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-and-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Benchmark smoke test
+        run: |
+          ./build/perfmap_bench \
+            --benchmark_filter='^(std_unordered_map|perfmap_balanced)/(insert_grow|find_hit)/1024$' \
+            --benchmark_min_time=0.001s
+
+      - name: Tradeoff benchmark smoke test
+        run: |
+          ./build/perfmap_tradeoffs \
+            --benchmark_filter='^(BM_StdMap_MissHeavy|BM_PerfMap_MissHeavy)/1024$' \
+            --benchmark_min_time=0.001s

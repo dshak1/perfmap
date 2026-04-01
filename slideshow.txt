@@ -1,0 +1,190 @@
+GDSC Technical Workshop
+Diar Shakimov
+
+Outcomes for Attendees
+
+Get a niche, technical project to put on resume
+Networking and Q&A with googlers
+Linkedin Post (prize pool w/hashtag)
+Merch (if we can get some)
+I also think a small thing we can do as execs
+Is just add our linkedins and befriend these ppl 
+
+I don’t think its really coordinated but after storm hacks the surge ppl went around and liked and commented on every post with #surginit
+
+I be so real at storm hacks i met w some of their execs and when they heard my project idea they liked it, now when they see me in the hall i dap em up and talk to them. The result is, the friction to attend all our future events is lessened greatly and its not like a greyed out area of the map anymore
+
+The attendees who might be first years or up to that point not be involved much on campus now the map becomes a little less grey (insert new map discovered)
+They feel a bit more like the’re on the team (drake in the nc team)
+
+Ill get mahim, ariel, sid, daniel smith, fady, darrick, mehrdad, martin, sri, saad, muneeb, abdullah and joar (subvision), keyaan, yannick, anton, dominion, carlos (darkvision)???, Arman/Rodrigo/Michelle/Jenna???, Rohith, andy, finnick, liam, george?
+
+
+
+Format Building Blocks (things we can include)
+Technical Project Workshop with Google Style C++
+Live Mock Interview (Mehrdad+Sri)
+Q/A (Sri)
+Post Workshop Mini Hackathon
+
+These are some ideas, or building blocks as I called em cuz we can mix and match these potential additions based on the overlap of what you guys think is a good idea and what is feasible 
+
+Technical Workshop 
+I can run a walk through project to give them a template for something using google style C++. Quiz them the whole way, have them discuss ideas and intuition, then I can show them some examples of how to upscale the project and do your own thing or take some ideas from it and build something new. 
+Also I’ll have the idea validated by the Googler to make sure he thinks it is a good thing to put on resume
+hings id talk about for c++:
+what does it mean to write gorgeous C++
+when u hear something like “gorgeous” C++ u might think of this guy (insert picture of 400lb discord mod with fedora and anonymous mask”
+how does your cmpt 225 assignment code differ from production code? (ask them some things about what they think it might be, give prizes like stickers, pens, say person with the best project in a week (take submissions on devpost) gets some grand prize)
+maybe do a brief intro on c++
+how google writes c++
+Scalability
+Wide codebase
+Compatibility
+Readabiilty
+maintainability
+what our project is
+code it
+talk about ways you can improve on this and make it your own
+it’d be cool if I made some fill in the blank parts of the workshop up to the people to cod
+
+
+Potential Topic ie What will we Build
+Google benchmarks performance analysis tool
+Compare std::vector vs custom implementations
+
+
+Maybe we should speak about it in terms of what matters to the students (something impressive to put on a resume, something they can look really smart talking in depth about, give the code to chatgpt and get it to quiz you on it, (talk about how i was grilled on my resume in interview), something they can build on? 
+You could put this on your resume have the star method, you got some clear quantified metrics, 
+
+Claude’s suggestions::
+ Tier 1: Most Impressive
+gRPC Service with Protocol Buffers
+Build a simple microservice using gRPC (remote procedure calls) ie function that looks local but runs on another machine
+Google infrastructure patterns
+Teaches: modern C++, concurrency, network programming
+Why it slaps: This is literally what Google uses internally and its performance driven (low latency high throughput API), real time data streaming
+Google Benchmark Performance Analysis Tool
+Use Google's Benchmark library to profile different data structure implementations
+Compare std::vector vs custom implementations
+Visualize results
+Teaches: performance awareness, profiling, optimization
+Why it slaps: Shows you care about performance like real SWEs do
+Abseil Library Integration Project
+Build a CLI tool using Google's Abseil library (their C++ stdlib extensions)
+Could be a log parser, file processor, or data pipeline
+Use absl::StatusOr, absl::Span, string utilities
+Teaches: modern C++ patterns, error handling, Google conventions
+Why it slaps: Abseil is what Google uses instead of raw STL
+Tier 2: Solid & Doable
+Google Test Framework - Build a Tested Library
+Create a data structures library (custom hash map, LRU cache, etc.)
+Write comprehensive tests using Google Test
+Add GitHub Actions CI
+Teaches: TDD, testing, build systems
+Why it slaps: Shows you write production-quality code
+Chrome V8 JavaScript Embedder
+Embed V8 engine in a C++ application
+Create a simple JS runtime or automation tool
+Teaches: embedding, APIs, build complexity
+Why it slaps: V8 is a real Google product, this is unique
+Protocol Buffer Schema Evolution Demo
+Show how to handle versioning/backwards compatibility
+Build client/server that handles multiple proto versions
+Teaches: API design, backwards compatibility
+Why it slaps: This is a real production problem
+
+My Top Pick for Your Workshop:
+gRPC Chat Application or Task Queue System
+Why:
+Uses actual Google tech (gRPC, Protocol Buffers)
+Teaches concurrency, networking, modern C++
+Template is reusable (they can build different services)
+Impressive on resume ("Built distributed system using gRPC")
+You can show Google Style throughout (2-space indent, naming conventions, error handling with absl::Status)
+Natural extension points for hackathon (add authentication, persistence, load balancing)
+Structure:
+YouTube Pre-work: Setting up gRPC, basic C++ review
+Workshop: Build a simple chat server/client together
+Define .proto files
+Implement server with proper error handling
+Implement client
+Show Google Style conventions throughout
+Quiz points: "Why use absl::StatusOr instead of throwing exceptions?" "Why 2 spaces?"
+Hackathon Extension: Add features (persistence, auth, rooms, file sharing)
+* we can make the project more focused and easier to mark by having some streams best implementation of xyz or highest metric scoire idk
+Additional Recommendations
+Food Strategy
+Don't bury this - lead with it in marketing:
+"Free Popeyes + technical workshop with Google engineers"
+Partner with local spots that students actually like
+Budget ~$15/person if you want good turnout
+Engagement Mechanics
+Your quiz/prize idea is good but make it interactive:
+Kahoot during the workshop with instant prizes
+"Spot the style violation" game with code snippets
+Live coding challenges with leaderboard
+
+
+
+How to Pass the Technical Interview with Mehrdad Momenizadeh 
+The word Leetcode strikes fear into the hearts of CS students. But why?
+Even with tools like cluely and claude 4.6 being better than pretty much any single engineer, leetcode is still around. Companies like Meta, have leaned into this and have allowed and encouraged the use of AI for their technical interviews because even with them its still not enough. Why because they dont only want to see you get the right answer but they want to see you reason, they want to hear your thoughts, they want to see you get stuck and what you do about it. We’re gonna cover this in depth, here to help me with this is my brother Mehrdad, a published machine learning researcher in Delta lab and an incoming ML engineer at Huawei.
+*let mehrdad do his thing
+The difficulty, time pressure, stage fright. Preparing is hard, it requires you to know and be able to apply stuff we learned in CMPT 225 and CMPT 307. 
+Not only that, getting a working solution is sometimes not enough, we need to consider runtime, and space complexity. 
+And if you can’t articulate your reasoning and intuition, its hard not to assume you were using AI
+*Hear a Googler speak about his approach and demonstrate his methodical process irl (Mehrdad, Sri)
+Personally, seeing people I put on pedestals walk through it and very humanly, at first, be lost but then methodically break it down and arrive at a solution helped break down the barrier to start more practice. You do a few and they start to become repetitive and doable. At first you had no clue then watch neetcode, then you had an idea (which was wrong) then watched neetcode, then I had an idea (where part of it was correct) then I watched neetcode, etc. Thing is, you gotta keep going. 
+
+
+
+Mehrdad agreed to do it:
+One of the smartest and humblest guys I know, offers from Tiktok, Huawei …
+Gave me some monumental help for my interviews
+
+
+
+Personal Motivation
+Personal growth through Hackathons/Workshops
+Promote the GDSC brand
+
+When I first got into university I would come for classes and go back home. 
+My friends didn’t talk about anything related to CS and I wondered why I was stagnating and tbh felt stupid in lectures. 
+If I had opened my eyes to these events earlier on, god knows how much more I could have accomplished.
+
+Mini Post Workshop Hackathon
+Host on devpost (like the gemini hackathons)
+Give prizes of credits and merch
+
+While a hackathon may sound like a big deal, I think it might not actually be that hard.
+We can do it virtually via devpost (github link, explanation of how you used google style coding or stuff from the workshop,
+We can incentivize following through with prizes for submissions
+
+
+
+
+i saw in a cursor hackathon
+some guy (jacky zhong) is hosting it pretty much by himself
+his prizes are literally cursor credits and merch
+if we put in a request how likely is it that we can get something like that ie what is the dynamic with google ppl, do they know we exist, are we tight w em or what?
+Is it possible to do something like winner gets a google office tour or some google merch (sent from google)
+
+
+Intro Session & Youtube Videos
+For those who’d want to brush up or learn some skills which would be relevant for the technical workshop
+I’ll make a youtube playlist of videos covering the basics for what’ll be required for the technical workshop
+This includes things like: 
+IDE setup, debugging
+Things we didn’t but should have covered in CMPT 120,125, 225 
+*mainly highlevel ideas and primitive code so your mind isn’t blank when technical terms come up
+My friend who is very cracked near perfect gpa, well into third year, “came clean” to me and was like until recently I didn’t know what node js actually is as if it was some shocking thing and I thought to myself, I’ve heard this 1000 times but I can’t define it for you either you know what I mean? I don’t like anything to do with front end but the point is more like, cs students nowadays put a ton of shit on their resumes and linkedins and know maybe 60% of it. A friend of mine asked me to over his resume and I hopped on a call with him to look over it together and for pretty much every project he had the star method, boldings, numbers and keywords and everything but he couldn’t answer anything or speak freely about anything past his first bullet point for any project, rather waffle on and switch to some irrelevant yap spree about something he does know while never answering the question. Point is we are overwhelmed with the demands of the job market so we exaggerate racking up some sort of bs debt which will bite us on our ass when we get asked anything technical about our resume in job interviews which they definitely did in mine (luckily I prepped well) . Bullshit detector for resume
+Things like cmake, json (settings, launch, tasks), 
+
+
+
+Googlers Presentation
+Small presentation and then q/a
+What they did in internship, application process, technical prep, resume/projects/experience that got them in
+
+Alternatively I can make a small intro to them assuming I’d know them well enough, for Sri I definitely could so it's not a hassle for him and maybe he focuses on making something else

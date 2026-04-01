@@ -2,113 +2,188 @@
 title: "PerfMap"
 subtitle: "A Google-Style C++ Performance Workshop"
 author: "Diar Shakimov | SFU GDSC"
-date: "March 10, 2026"
+date: "March 31, 2026"
 ---
 
 # One-Line Pitch
 
-Build a cache-aware hash map that can beat `std::unordered_map` on real workloads.
+Build a custom hash map, measure it honestly, and leave with a project you can actually defend.
 
-- Google-style C++
-- Google Benchmark + Google Test + Abseil
-- Strong resume bullet with measurable results
+- Real workload story
+- Real benchmark numbers
+- Real trade-offs, not fake perfection
 
 ::: notes
-Open by framing the workshop as a systems project, not a toy data-structures lecture.
-The pitch is that students leave with code, benchmarks, and a story they can defend in interviews.
-Mention the date as March 10, 2026 and avoid reading out a specific time until the event logistics are finalized.
+Open hard and fast.
+Tell them this is not a toy "we coded a hashmap from scratch" talk.
+The point is to show how a small systems project becomes resume-grade when it has measurement, iteration, and a believable use case.
 :::
 
-# Why This Project Works In 2026
+# Quick Room Check
 
-- Generic CRUD apps are cheap to generate.
-- Benchmark numbers are much harder to fake.
-- `perfmap` forces students to explain cache locality, memory layout, and trade-offs.
-- It is Google-relevant, technically deep, and easy to extend after the workshop.
-
-**Translation for resumes:** one repo can become systems, cloud, or ML infra depending on the direction you take it.
+- Who here has coded in `C++`?
+- Who has used a hash map without knowing how it works underneath?
+- What makes a project feel impressive in 2026?
+- What makes a project feel tutorial-tier?
 
 ::: notes
-This is where you can talk about recruiter fatigue and the Claude era without sounding cynical.
-The key message is not "AI bad"; it is "measurable engineering work stands out."
+This is your first candy slide.
+Ask for hands, then cold-call one or two short answers.
+If someone says "real users," "benchmarks," "trade-offs," or "depth," reward that immediately because it sets up the rest of the talk.
 :::
 
-# Workshop Flow
+# What Makes A Project Stand Out In 2026
 
-1. Build and run the repo.
-2. Understand the data structure and its design choices.
-3. Run tests, benchmarks, and explain the wins and losses.
-4. Show three serious ways to extend the project.
-5. Hand off to mock interview and guest Q&A.
+- It solves a real problem or models a believable workload
+- It shows iteration, not just one lucky final result
+- It has measurable evidence
+- It uses AI intentionally, not invisibly
+- It is specific enough that you can explain the hard parts
 
 ::: notes
-Keep this slide brisk. It tells the audience there is a beginning, a measurable middle, and a concrete next step.
+This slide comes straight from your raw `IDEAS.md`.
+Frame the modern bar clearly: the differentiator is not "I shipped code."
+The differentiator is "I can explain why this design exists, what I tried, what failed, and what the numbers say."
 :::
 
-# What Attendees Leave With
+# What Makes A Project Feel Tutorial-Tier
 
-- A niche C++ project they can actually talk about
-- A repo using `cmake`, Google Test, Google Benchmark, Abseil, and Google-style conventions
-- A benchmark-backed resume bullet
-- A roadmap for a post-workshop mini hackathon or personal extension
-
-**Better than saying “I built a data structure”:** say what you measured, what trade-off you found, and what you improved next.
+- Generic CRUD with no real constraints
+- No metrics, no benchmarks, no users, no feedback loop
+- No honest loss or trade-off anywhere
+- AI did the whole thing and you cannot explain the decisions
+- Surface area everywhere, depth nowhere
 
 ::: notes
-This is a good place to tie outcomes back to co-op search, networking, and interview prep.
+Do not sound bitter here.
+The point is not to shame simple projects.
+The point is to explain why reviewers default to skepticism when they see familiar project shapes with no evidence behind them.
+:::
+
+# Where Good Project Ideas Usually Come From
+
+- coursework where you go beyond the assignment
+- labs, research groups, startups, and hackathons
+- repeated pain points you actually felt yourself
+- niches with real constraints: latency, memory, scale, correctness
+- follow-on iterations after a first version already works
+
+::: notes
+This is where you can briefly tell the "find real opportunities" story.
+Keep it practical: clubs, professors, labs, startup work, hackathons, and personal pain are all credible project sources because they come with constraints.
+:::
+
+# Why PerfMap Is A Good Workshop Project
+
+- small enough to understand in one session
+- deep enough to talk about caches, memory layout, and trade-offs
+- benchmarkable with one command
+- easy to extend toward cloud, ML infra, or advanced C++
+- strong because it includes both wins and losses
+
+::: notes
+Say explicitly that the project works because it is narrow.
+It is one data structure, but it opens the door to systems thinking, benchmark rigor, and resume storytelling.
 :::
 
 # What PerfMap Actually Is
 
-- Open-addressing hash map in C++17
-- Flat `std::vector<Slot>` storage for better locality
-- Linear probing plus tombstone-aware deletion
-- Power-of-two capacity and bitmask indexing
-- `absl::Status` / `absl::StatusOr` API plus `FindPtr()` zero-allocation fast path
-
-**Core lesson:** modern performance work is often about memory behavior, not just asymptotic complexity.
+- open-addressing hash map in `C++17`
+- flat `std::vector<Slot>` storage
+- linear probing and tombstone-aware deletion
+- power-of-two capacity and bitmask indexing
+- `absl::Status` / `absl::StatusOr` plus `FindPtr()` for hot paths
 
 ::: notes
-Do not get lost in every method signature yet.
-What matters here is that the repo has enough substance to discuss architecture, correctness, and optimization.
+Do not drown them in syntax yet.
+The important message is that memory layout is the main character, not the data structure name.
 :::
 
-# Why It Can Beat The STL
+# Why Flat Storage Can Win
 
-![](assets/memory_layout.png){width=88%}
+![](assets/memory_layout.png){width=86%}
+
+- fewer pointer jumps
+- more contiguous memory access
+- easier hardware prefetch behavior
+- cleaner benchmark story
 
 ::: notes
-Use this to contrast pointer chasing with contiguous storage.
-Say explicitly that `std::unordered_map` is not "bad"; it has different trade-offs and better miss behavior in this benchmark.
+Ask: "Why might the flat array beat a chained map even if both are O(1) on paper?"
+Wait for someone to say cache locality or pointer chasing.
+This is another candy moment.
 :::
 
-# Benchmarks: The Part Recruiters Remember
+# One Repo, Multiple Workloads
 
-![](assets/benchmark_summary.png){width=86%}
-
-- Insert: `2.0x` to `4.0x` faster
-- Erase: `6.4x` to `8.0x` faster
-- Mixed workload: `1.7x` to `3.5x` faster
-- Miss lookups: still worse, which is the most interesting trade-off to discuss
+- `HashMap`: balanced baseline
+- `ReadHeavyHashMap`: lower load factor for faster lookups
+- `ChurnHeavyHashMap`: more aggressive tombstone cleanup
+- `SpaceEfficientHashMap`: tighter memory budget
+- `IndirectHashMap`: better for large payloads
+- `Scratch*` variants: built for repeated clear-and-rebuild cycles
 
 ::: notes
-These numbers come directly from `project/perfmap/docs/RESULTS.md`.
-Say that the miss path is not a flaw to hide; it is exactly the kind of trade-off that makes the project credible.
+This slide helps you avoid the "one benchmark wonder" criticism.
+The repo is not just one container; it is a small lab for workload-aware design.
 :::
 
-# Google-Style C++ Angle
+# The Benchmark Rules
 
-- Optimize for readability, maintainability, and team scale
-- Prefer explicit error handling over cleverness
-- Keep naming, formatting, and file structure boring and consistent
-- Test correctness before chasing speed
-- Benchmark only after the implementation is defensible
-
-**The vibe:** not “fancy C++”, but “obvious C++ another engineer can debug at 2 a.m.”
+- same deterministic key sets for every implementation
+- same adapter contract for STL, Abseil, and PerfMap
+- setup excluded from steady-state lookup and erase timing
+- reserved benchmarks pre-size every container fairly
+- separate "where we lose" benchmarks kept in the repo on purpose
 
 ::: notes
-This is a direct bridge into your Google-style C++ explanation.
-If you want, show one short snippet live instead of overloading the slide.
+Ask the room what would make a performance claim feel fake.
+Then show that fairness rules are part of the engineering, not presentation polish.
+This is where you define regression tracking, benchmark harnessing, and honest methodology in simple language.
+:::
+
+# The Honest Result
+
+- `perfmap::ScratchIndirectHashMap` is the strongest real win
+- at `16,384` entries it runs around `53.0M items/s`
+- that is about `7.3x` faster than `std::unordered_map`
+- `absl::flat_hash_map` still wins broad large-value lookup
+- the honest loss is part of why the repo is credible
+
+::: notes
+Use exact numbers from the March 31, 2026 spot check.
+Say them slowly.
+Then immediately say the broader large-value case still loses badly to Abseil on misses and still loses on hits too.
+That honesty is what makes the win worth listening to.
+:::
+
+# The Winning Workload Story
+
+- think: per-batch document enrichment cache
+- each batch contains many records and large metadata blobs
+- build a temporary lookup structure for that batch
+- query it hard during the batch
+- clear it and rebuild for the next batch
+
+::: notes
+This is the real-world scenario you were asking for in `IDEAS.md`.
+High level: "temporary cache for one batch."
+Technical level: "large values plus repeated rebuilds, so O(1) clear and indirect storage matter."
+That makes the niche understandable without sounding fake.
+:::
+
+# Why Google-Style C++ Matters Here
+
+- explicit error handling
+- boring naming and formatting
+- correctness before optimization
+- benchmark after the code is defensible
+- code another engineer can read at `2 a.m.`
+
+::: notes
+Make the two-space-indent joke once and move on.
+The real point is team-readable C++, not style cosplay.
+Tie `StatusOr`, tests, and file organization back to "production-minded code."
 :::
 
 # Live Demo Plan
@@ -121,85 +196,62 @@ make -j8
 ./perfmap_bench
 ```
 
-- Walk through `slot.h`, `hash_map.h`, tests, and benchmarks
-- Ask the room why tombstones exist before revealing the answer
-- Show how a tiny API choice like `FindPtr()` changes performance
+- show `slot.h`, `hash_map.h`, tests, and benchmark harness
+- ask why tombstones exist before revealing the answer
+- ask why `FindPtr()` exists before showing the miss-path cost
 
 ::: notes
-The best teaching moment is the tombstone invariant and the `FindPtr()` fast-path lesson.
-That gives students both a data-structure concept and a performance-engineering concept.
+This is where you slow down and teach.
+The two best demo moments are:
+1. a tombstone preserving the probe chain
+2. a tiny API decision changing benchmark behavior
 :::
 
-# Extension Track 1: AWS / DevOps
+# What Students Can Build Next
 
-- Containerize the benchmark runner for reproducible builds
-- Run scheduled benchmarks on GitHub Actions plus EC2 or Graviton instances
-- Store JSON benchmark history in S3 and surface regressions on a dashboard
-- Add perf regression gates so slowdowns fail CI
-- Wrap `perfmap` in a tiny key-value service and load-test it
-
-**Resume angle:** “Built a performance regression pipeline and benchmark service, not just a local data structure.”
+![](assets/extension_tracks.png){width=92%}
 
 ::: notes
-If you want cloud credits or merch as prizes, this slide gives the cleanest justification: students can extend into real cloud infra after the workshop.
+This slide lets you branch by audience interest.
+If the room is cloud-heavy, talk CI and Graviton.
+If the room is ML-heavy, talk feature-serving metadata caches.
+If the room is systems-heavy, talk Robin Hood hashing and metadata bytes.
 :::
 
-# Extension Track 2: Low-Level AI / ML Systems
+# Starter Repo For Attendees
 
-- Use `perfmap` as a hot-key cache for feature serving or inference metadata
-- Simulate AI-serving access patterns: repeated hot keys, bursty misses, skewed distributions
-- Compare scalar probing against SIMD-friendly probing on those workloads
-- Track p50, p95, and p99 latency rather than just average throughput
-- Turn it into a tiny “ML systems” repo without needing to train a giant model
-
-**Pitch:** a lot of ML infra is memory systems, lookup paths, and latency budgets.
+- clone the incomplete starter from `starter/perfmap-10d`
+- fill in the core open-addressing behavior
+- make the tombstone test pass
+- make rehashing work
+- then benchmark your version against the completed repo
 
 ::: notes
-This angle is stronger than “I used AI somehow.”
-It connects the project to recommendation systems, retrieval, and inference serving without leaving systems territory.
+Tell them you are giving them the "workshop version," not the full polished repo.
+That starter is intentionally incomplete so they get to build the important ideas themselves.
 :::
 
-# Extension Track 3: Advanced Performance C++
+# Mini Challenge
 
-- Robin Hood hashing to reduce probe-length variance
-- SwissTable-style metadata bytes for faster filtering
-- SIMD or NEON probing for multiple control bytes at once
-- Custom allocators and prefetch experiments
-- Sharded or concurrent variants with lock striping
-
-**Interview angle:** now the project becomes a platform for discussing CPU caches, branch prediction, and memory layout decisions.
+- improve one metric without lying about the result
+- explain one design choice clearly
+- document one honest loss
+- add one extension only if it makes the repo more measurable or more useful
 
 ::: notes
-This is the path for the strongest low-level students.
-You can point out that even if they only implement one of these well, the project becomes much more unique.
+This is a strong place to mention follow-up prizes, shout-outs, GitHub stars, or post-workshop submissions if you want.
+Keep the judging criteria concrete so nobody mistakes "more features" for "better engineering."
 :::
 
-# Serious Mini Hackathon Prompt
+# Questions For The Room And The Guests
 
-**Challenge:** make `perfmap` more impressive without making it fake.
-
-- Improve a metric
-- Add tooling or observability
-- Adapt it to a real workload
-- Write a README that explains the design trade-offs
-
-**Judging criteria:** measurable improvement, explanation quality, code quality, and realism.
+- What do you think matters more: novelty, depth, or measurable impact?
+- If you had one more week, which extension would you ship first?
+- What makes a benchmark claim believable in an interview?
+- What turns a student repo into something recruiters actually remember?
 
 ::: notes
-This slide is where you can mention merch, stickers, cloud credits, or repost incentives if those get confirmed.
-Keep the criteria measurable so the extensions do not turn into vague feature dumping.
-:::
-
-# Questions For The Guests
-
-- What makes a student project feel real instead of inflated?
-- How much does performance work matter on real teams?
-- What is the best way to talk about benchmarks in interviews?
-- Which extension track would they personally pick next?
-
-**Closing line:** the point is not to build a hash map forever; the point is to learn how to make technical work measurable and explainable.
-
-::: notes
-This is your handoff slide into the panel or Q&A section.
-End by reinforcing that measurable, explainable engineering is the meta-skill.
+End by bringing the audience back into the conversation.
+The closing line should be some version of:
+"The point is not to build a hash map forever. The point is to learn how to do technical work that is measurable, explainable, and hard to fake."
 :::

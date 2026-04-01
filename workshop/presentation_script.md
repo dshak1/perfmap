@@ -2,56 +2,108 @@
 
 ## Slide 1
 
-This workshop is centered on `perfmap`, a custom hash map project that is technical enough to stand out but still teachable in a room of students. The goal is not just to build something that compiles. The goal is to build something measurable.
+Set the tone immediately. This session is about building a small systems
+project that becomes impressive because it is measurable and explainable,
+not because it has a huge feature list.
 
 ## Slide 2
 
-Frame the market honestly: simple apps are easier than ever to generate, so the differentiator is no longer just shipping a repo. It is whether you can explain trade-offs, back claims with benchmark data, and clearly show why your design choices mattered.
+Start engaging the room right away. Ask who has written C++, who knows
+what a hash map is under the hood, and what makes a project feel strong
+versus tutorial-tier. Use the answers to seed the rest of the talk.
 
 ## Slide 3
 
-Preview the structure so the room knows this is a real workshop, not random live coding. You build, validate, measure, extend, then transition into interview and panel discussion.
+Define the five ideas you want people to remember: real problem,
+iteration, measurable evidence, intentional AI use, and enough depth to
+defend the hard parts in an interview.
 
 ## Slide 4
 
-Tell them exactly what they get: a better resume bullet, better technical vocabulary, and a project template they can grow into something personal.
+Show the opposite. A project feels weak when it has familiar surface
+area but no constraints, no numbers, no real trade-off, and no sign that
+the builder actually understood the design.
 
 ## Slide 5
 
-Define the project cleanly. PerfMap is an open-addressing hash map with linear probing, tombstones, rehashing, and a zero-allocation lookup path for benchmarks. The higher-level lesson is that memory layout can dominate algorithmic elegance.
+Give students practical places to find better ideas: classes,
+professors, research, clubs, hackathons, startups, and repeated pain
+points they actually encounter. The theme is constraints. Constraints
+produce better projects.
 
 ## Slide 6
 
-Use the diagram to explain locality versus pointer chasing. Make it clear that the story is not “we beat STL because STL is bad.” The story is “different data-structure layouts produce different performance profiles.”
+Explain why PerfMap is a good workshop repo. It is narrow enough to
+teach in one room, but deep enough to talk about memory layout,
+benchmarking, API design, and trade-offs.
 
 ## Slide 7
 
-Walk through the benchmark wins and the one important loss. The miss-path regression is actually what makes the project stronger, because now students have a real trade-off to talk about instead of fake perfection.
+Define the project cleanly: open addressing, linear probing, tombstones,
+rehashing, power-of-two capacity, and a `FindPtr()` fast path. Keep the
+message simple: the real lesson is memory behavior.
 
 ## Slide 8
 
-Tie the repo back to Google-style C++. Readability, consistency, explicit error handling, and tooling-friendly code matter more than flexing obscure language features.
+Use the diagram to contrast contiguous storage with pointer chasing.
+Pause and ask why a flat layout might win even when the asymptotic
+complexity looks similar on paper.
 
 ## Slide 9
 
-Run the repo. Show that the project has tests, benchmarks, and a clear workflow. Ask the room why `FindPtr()` exists and why tombstones matter before revealing the answers.
+Show that the repo is more than one container. Different policies and
+specializations exist because different workloads want different
+trade-offs. This is where the project starts looking like a systems lab
+instead of a toy implementation.
 
 ## Slide 10
 
-Sell the AWS/DevOps path as “productionizing the benchmark story.” The key idea is reproducibility and regression detection, not just spinning up cloud infra for its own sake.
+Explain benchmark fairness in plain English. Same keys, same setup
+rules, same adapter contract, and explicit "where we lose" cases kept in
+the repo. This is the difference between a benchmark story and benchmark
+theater.
 
 ## Slide 11
 
-Sell the AI/ML path as systems-first. Feature serving, retrieval, caching, and inference metadata all rely on fast lookups and stable latency. This makes the repo relevant to ML students without turning it into a shallow “AI wrapper.”
+Use the current numbers. The strongest win is the large-value
+scratch/rebuild niche, where `ScratchIndirectHashMap` is about `7.3x`
+faster than `std::unordered_map` in the March 31, 2026 spot check. Then
+say the broad large-value lookup case still loses to `absl::flat_hash_map`.
 
 ## Slide 12
 
-Sell the advanced C++ path to the strongest builders in the room. Even one serious extension like Robin Hood hashing or SIMD probing can turn the project into a standout systems repo.
+Tell the real-world story clearly: per-batch document enrichment cache.
+Each batch carries lots of large metadata blobs, you build a temporary
+lookup structure, hammer it for that batch, then clear and rebuild.
+That makes the winning specialization feel believable.
 
 ## Slide 13
 
-If you run the post-workshop challenge, keep it grounded. The best project is not the one with the most features. It is the one with the cleanest hypothesis, strongest evidence, and most honest explanation.
+Use Google-style C++ as a credibility layer, not a gimmick. The point is
+explicit error handling, readability, consistent structure, and
+correctness-first engineering.
 
 ## Slide 14
 
-Use the guest questions to bridge from the project to careers. The deck should end on the idea that measurable engineering work is the real differentiator.
+Walk the room through the live demo sequence. Build, test, benchmark,
+then inspect the code. Ask why tombstones exist and why `FindPtr()`
+exists before showing the answers.
+
+## Slide 15
+
+Sell the three extension paths depending on audience interest:
+cloud/DevOps, low-level ML systems, and advanced performance C++. This
+helps students see how one repo can branch into different career stories.
+
+## Slide 16
+
+Tell them there is a starter repo layout in `starter/perfmap-10d`. The
+point is not to hand them the finished answer. The point is to let them
+build the core invariants themselves and compare against the completed
+repo later.
+
+## Slide 17
+
+Close with the mini challenge and guest questions. Reinforce the meta
+lesson: the best student projects are the ones that are measurable,
+defensible, and honest about trade-offs.
