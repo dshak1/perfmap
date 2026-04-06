@@ -30,6 +30,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "perfmap/memory_metrics.h"
 #include "perfmap/slot.h"
 
 namespace perfmap {
@@ -240,6 +241,7 @@ class HashMap {
   size_t size() const { return size_; }
   bool empty() const { return size_ == 0; }
   size_t capacity() const { return table_.size(); }
+  size_t tombstone_count() const { return tombstone_count_; }
 
   // Reserve enough buckets to hold at least `expected_size` live entries
   // without crossing the target load factor.
@@ -264,6 +266,20 @@ class HashMap {
     if (table_.empty()) return 1.0;
     return static_cast<double>(size_ + tombstone_count_) /
            static_cast<double>(table_.size());
+  }
+
+  MemoryMetrics memory_metrics() const {
+    MemoryMetrics metrics;
+    metrics.live_entries = size_;
+    metrics.reserved_capacity = table_.size();
+    metrics.tombstone_count = tombstone_count_;
+    metrics.hot_table_bytes = table_.capacity() * sizeof(Slot<K, V>);
+    metrics.payload_storage_bytes = 0;
+    metrics.live_payload_bytes = size_ * sizeof(V);
+    metrics.effective_load_factor = effective_load_factor();
+    metrics.capacity_precision = MetricPrecision::kExact;
+    metrics.bytes_precision = MetricPrecision::kExact;
+    return metrics;
   }
 
   // -----------------------------------------------------------------------

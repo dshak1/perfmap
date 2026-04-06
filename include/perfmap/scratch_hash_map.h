@@ -11,6 +11,7 @@
 
 #include "absl/status/status.h"
 #include "perfmap/hash_map.h"
+#include "perfmap/memory_metrics.h"
 
 namespace perfmap {
 
@@ -88,6 +89,24 @@ class ScratchHashMap {
 
   size_t size() const { return size_; }
   bool empty() const { return size_ == 0; }
+  size_t capacity() const { return table_.size(); }
+
+  MemoryMetrics memory_metrics() const {
+    MemoryMetrics metrics;
+    metrics.live_entries = size_;
+    metrics.reserved_capacity = table_.size();
+    metrics.tombstone_count = 0;
+    metrics.hot_table_bytes = table_.capacity() * sizeof(Slot);
+    metrics.payload_storage_bytes = 0;
+    metrics.live_payload_bytes = size_ * sizeof(V);
+    metrics.effective_load_factor =
+        table_.empty() ? 1.0
+                       : static_cast<double>(size_) /
+                             static_cast<double>(table_.size());
+    metrics.capacity_precision = MetricPrecision::kExact;
+    metrics.bytes_precision = MetricPrecision::kExact;
+    return metrics;
+  }
 
  private:
   struct Slot {

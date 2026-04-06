@@ -14,10 +14,14 @@ cmake-build-*/
 *.a
 *.so
 *.dylib
+*.pyc
+__pycache__/
 
 # Benchmark output
 results.json
 *.json
+!bench/baselines/**/*.json
+results/runs/
 
 # OS
 .DS_Store

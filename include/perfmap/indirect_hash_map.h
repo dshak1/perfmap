@@ -11,6 +11,7 @@
 
 #include "absl/status/status.h"
 #include "perfmap/hash_map.h"
+#include "perfmap/memory_metrics.h"
 #include "perfmap/slot.h"
 
 namespace perfmap {
@@ -107,6 +108,25 @@ class IndirectHashMap {
   size_t size() const { return size_; }
   bool empty() const { return size_ == 0; }
   size_t capacity() const { return table_.size(); }
+  size_t tombstone_count() const { return tombstone_count_; }
+
+  MemoryMetrics memory_metrics() const {
+    MemoryMetrics metrics;
+    metrics.live_entries = size_;
+    metrics.reserved_capacity = table_.size();
+    metrics.tombstone_count = tombstone_count_;
+    metrics.hot_table_bytes = table_.capacity() * sizeof(IndexSlot);
+    metrics.payload_storage_bytes =
+        values_.capacity() * sizeof(typename decltype(values_)::value_type);
+    metrics.live_payload_bytes = size_ * sizeof(V);
+    metrics.effective_load_factor =
+        table_.empty() ? 1.0
+                       : static_cast<double>(size_ + tombstone_count_) /
+                             static_cast<double>(table_.size());
+    metrics.capacity_precision = MetricPrecision::kExact;
+    metrics.bytes_precision = MetricPrecision::kExact;
+    return metrics;
+  }
 
   void Rehash(size_t new_capacity) {
     new_capacity = RoundUpPow2(new_capacity);

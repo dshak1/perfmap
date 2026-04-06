@@ -12,7 +12,6 @@
 #include <benchmark/benchmark.h>
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <numeric>
@@ -20,10 +19,17 @@
 #include <string>
 #include <vector>
 
+#include "benchmark_support.h"
 #include "perfmap/map_adapters.h"
 
 namespace perfmap {
 namespace {
+
+using benchmarks::AttachAdapterCounters;
+using benchmarks::FillIntMap;
+using benchmarks::LargeValue;
+using benchmarks::MakeLargeValue;
+using benchmarks::ReadValueForChecksum;
 
 std::vector<int> GenerateUniqueKeys(size_t count, uint32_t seed, int base) {
   std::vector<int> keys(count);
@@ -40,10 +46,6 @@ struct WorkloadData {
   std::vector<int> mixed_lookup_keys;
   std::vector<int> mixed_erase_keys;
   std::vector<int> churn_replacement_keys;
-};
-
-struct LargeValue {
-  std::array<uint64_t, 128> words{};
 };
 
 WorkloadData MakeWorkloadData(size_t size) {
@@ -68,17 +70,8 @@ WorkloadData MakeWorkloadData(size_t size) {
 }
 
 template <typename Adapter>
-void FillMap(Adapter& map, const std::vector<int>& keys) {
-  map.Reserve(keys.size());
-  for (size_t i = 0; i < keys.size(); ++i) {
-    map.InsertOrAssign(keys[i], static_cast<int>(i));
-  }
-}
-
-template <typename Adapter>
 void RunInsertGrow(benchmark::State& state) {
   const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
-
   for (auto _ : state) {
     Adapter map;
     for (size_t i = 0; i < data.insert_keys.size(); ++i) {
@@ -88,13 +81,17 @@ void RunInsertGrow(benchmark::State& state) {
     benchmark::ClobberMemory();
   }
 
+  Adapter metrics_map;
+  for (size_t i = 0; i < data.insert_keys.size(); ++i) {
+    metrics_map.InsertOrAssign(data.insert_keys[i], static_cast<int>(i));
+  }
+  AttachAdapterCounters(state, metrics_map);
   state.SetItemsProcessed(state.iterations() * data.insert_keys.size());
 }
 
 template <typename Adapter>
 void RunInsertReserved(benchmark::State& state) {
   const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
-
   for (auto _ : state) {
     state.PauseTiming();
     Adapter map;
@@ -108,6 +105,12 @@ void RunInsertReserved(benchmark::State& state) {
     benchmark::ClobberMemory();
   }
 
+  Adapter metrics_map;
+  metrics_map.Reserve(data.insert_keys.size());
+  for (size_t i = 0; i < data.insert_keys.size(); ++i) {
+    metrics_map.InsertOrAssign(data.insert_keys[i], static_cast<int>(i));
+  }
+  AttachAdapterCounters(state, metrics_map);
   state.SetItemsProcessed(state.iterations() * data.insert_keys.size());
 }
 
@@ -115,18 +118,19 @@ template <typename Adapter>
 void RunFindHit(benchmark::State& state) {
   const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
   Adapter map;
-  FillMap(map, data.insert_keys);
+  FillIntMap(map, data.insert_keys);
 
   uint64_t value_sum = 0;
   for (auto _ : state) {
     for (const int key : data.hit_keys) {
       const int* value = map.FindPtr(key);
       benchmark::DoNotOptimize(value);
-      value_sum += (value != nullptr) ? static_cast<uint64_t>(*value) : 0;
+      value_sum += ReadValueForChecksum(value);
     }
   }
 
   benchmark::DoNotOptimize(value_sum);
+  AttachAdapterCounters(state, map);
   state.SetItemsProcessed(state.iterations() * data.hit_keys.size());
 }
 
@@ -134,7 +138,7 @@ template <typename Adapter>
 void RunFindMiss(benchmark::State& state) {
   const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
   Adapter map;
-  FillMap(map, data.insert_keys);
+  FillIntMap(map, data.insert_keys);
 
   uint64_t miss_count = 0;
   for (auto _ : state) {
@@ -146,17 +150,17 @@ void RunFindMiss(benchmark::State& state) {
   }
 
   benchmark::DoNotOptimize(miss_count);
+  AttachAdapterCounters(state, map);
   state.SetItemsProcessed(state.iterations() * data.miss_keys.size());
 }
 
 template <typename Adapter>
 void RunErase(benchmark::State& state) {
   const auto data = MakeWorkloadData(static_cast<size_t>(state.range(0)));
-
   for (auto _ : state) {
     state.PauseTiming();
     Adapter map;
-    FillMap(map, data.insert_keys);
+    FillIntMap(map, data.insert_keys);
     state.ResumeTiming();
 
     size_t erased = 0;
@@ -167,6 +171,12 @@ void RunErase(benchmark::State& state) {
     benchmark::DoNotOptimize(map.Size());
   }
 
+  Adapter metrics_map;
+  FillIntMap(metrics_map, data.insert_keys);
+  for (const int key : data.insert_keys) {
+    benchmark::DoNotOptimize(metrics_map.Erase(key));
+  }
+  AttachAdapterCounters(state, metrics_map);
   state.SetItemsProcessed(state.iterations() * data.insert_keys.size());
 }
 
@@ -191,7 +201,7 @@ void RunMixed(benchmark::State& state) {
       const int* value =
           map.FindPtr(data.mixed_lookup_keys[i % data.mixed_lookup_keys.size()]);
       benchmark::DoNotOptimize(value);
-      value_sum += (value != nullptr) ? static_cast<uint64_t>(*value) : 0;
+      value_sum += ReadValueForChecksum(value);
     }
 
     size_t erased = 0;
@@ -204,6 +214,19 @@ void RunMixed(benchmark::State& state) {
     benchmark::DoNotOptimize(map.Size());
   }
 
+  Adapter metrics_map;
+  metrics_map.Reserve(size);
+  for (size_t i = 0; i < initial_count; ++i) {
+    metrics_map.InsertOrAssign(data.insert_keys[i], static_cast<int>(i));
+  }
+  for (size_t i = 0; i < lookup_count; ++i) {
+    benchmark::DoNotOptimize(
+        metrics_map.FindPtr(data.mixed_lookup_keys[i % data.mixed_lookup_keys.size()]));
+  }
+  for (size_t i = 0; i < erase_count; ++i) {
+    benchmark::DoNotOptimize(metrics_map.Erase(data.mixed_erase_keys[i]));
+  }
+  AttachAdapterCounters(state, metrics_map);
   state.SetItemsProcessed(
       state.iterations() * static_cast<int64_t>(initial_count + lookup_count +
                                                 erase_count));
@@ -234,7 +257,7 @@ void RunChurn(benchmark::State& state) {
 
         const int* value = map.FindPtr(new_key);
         benchmark::DoNotOptimize(value);
-        value_sum += (value != nullptr) ? static_cast<uint64_t>(*value) : 0;
+        value_sum += ReadValueForChecksum(value);
         live_keys[i] = new_key;
       }
     }
@@ -243,6 +266,23 @@ void RunChurn(benchmark::State& state) {
     benchmark::DoNotOptimize(map.Size());
   }
 
+  Adapter metrics_map;
+  metrics_map.Reserve(size);
+  std::vector<int> live_keys = data.insert_keys;
+  for (size_t i = 0; i < size; ++i) {
+    metrics_map.InsertOrAssign(live_keys[i], static_cast<int>(i));
+  }
+  for (size_t round = 0; round < 3; ++round) {
+    for (size_t i = 0; i < size; ++i) {
+      const int old_key = live_keys[i];
+      const int new_key = data.churn_replacement_keys[round * size + i];
+      benchmark::DoNotOptimize(metrics_map.Erase(old_key));
+      metrics_map.InsertOrAssign(new_key, static_cast<int>(round * size + i));
+      benchmark::DoNotOptimize(metrics_map.FindPtr(new_key));
+      live_keys[i] = new_key;
+    }
+  }
+  AttachAdapterCounters(state, metrics_map);
   state.SetItemsProcessed(state.iterations() *
                           static_cast<int64_t>(size * 3 * 3));
 }
@@ -290,11 +330,9 @@ void RunLargeValueFindHit(benchmark::State& state) {
   Adapter map;
   map.Reserve(data.insert_keys.size());
 
-  LargeValue value;
   for (size_t i = 0; i < data.insert_keys.size(); ++i) {
-    value.words[0] = static_cast<uint64_t>(i);
-    value.words[127] = static_cast<uint64_t>(i * 3);
-    map.InsertOrAssign(data.insert_keys[i], value);
+    map.InsertOrAssign(data.insert_keys[i],
+                       MakeLargeValue(static_cast<uint64_t>(i), 0xA11CEu));
   }
 
   uint64_t checksum = 0;
@@ -302,11 +340,12 @@ void RunLargeValueFindHit(benchmark::State& state) {
     for (const int key : data.hit_keys) {
       const LargeValue* result = map.FindPtr(key);
       benchmark::DoNotOptimize(result);
-      checksum += (result != nullptr) ? result->words[0] : 0;
+      checksum += ReadValueForChecksum(result);
     }
   }
 
   benchmark::DoNotOptimize(checksum);
+  AttachAdapterCounters(state, map);
   state.SetItemsProcessed(state.iterations() * data.hit_keys.size());
 }
 
@@ -316,11 +355,9 @@ void RunLargeValueFindMiss(benchmark::State& state) {
   Adapter map;
   map.Reserve(data.insert_keys.size());
 
-  LargeValue value;
   for (size_t i = 0; i < data.insert_keys.size(); ++i) {
-    value.words[0] = static_cast<uint64_t>(i);
-    value.words[127] = static_cast<uint64_t>(i * 7);
-    map.InsertOrAssign(data.insert_keys[i], value);
+    map.InsertOrAssign(data.insert_keys[i],
+                       MakeLargeValue(static_cast<uint64_t>(i), 0xBEEFu));
   }
 
   uint64_t misses = 0;
@@ -333,6 +370,7 @@ void RunLargeValueFindMiss(benchmark::State& state) {
   }
 
   benchmark::DoNotOptimize(misses);
+  AttachAdapterCounters(state, map);
   state.SetItemsProcessed(state.iterations() * data.miss_keys.size());
 }
 
@@ -368,11 +406,16 @@ void RunScratchCycle(benchmark::State& state) {
     for (const int key : data.hit_keys) {
       const int* value = map.FindPtr(key);
       benchmark::DoNotOptimize(value);
-      checksum += (value != nullptr) ? static_cast<uint64_t>(*value) : 0;
+      checksum += ReadValueForChecksum(value);
     }
   }
 
   benchmark::DoNotOptimize(checksum);
+  map.Clear();
+  for (size_t i = 0; i < data.insert_keys.size(); ++i) {
+    map.InsertOrAssign(data.insert_keys[i], static_cast<int>(i));
+  }
+  AttachAdapterCounters(state, map);
   state.SetItemsProcessed(state.iterations() *
                           static_cast<int64_t>(data.insert_keys.size() * 2));
 }
@@ -395,22 +438,25 @@ void RunLargeValueScratchCycle(benchmark::State& state) {
   uint64_t checksum = 0;
   for (auto _ : state) {
     map.Clear();
-
-    LargeValue value;
     for (size_t i = 0; i < data.insert_keys.size(); ++i) {
-      value.words[0] = static_cast<uint64_t>(i);
-      value.words[127] = static_cast<uint64_t>(i * 11);
-      map.InsertOrAssign(data.insert_keys[i], value);
+      map.InsertOrAssign(data.insert_keys[i],
+                         MakeLargeValue(static_cast<uint64_t>(i), 0x5CA7C4u));
     }
 
     for (const int key : data.hit_keys) {
       const LargeValue* result = map.FindPtr(key);
       benchmark::DoNotOptimize(result);
-      checksum += (result != nullptr) ? result->words[0] : 0;
+      checksum += ReadValueForChecksum(result);
     }
   }
 
   benchmark::DoNotOptimize(checksum);
+  map.Clear();
+  for (size_t i = 0; i < data.insert_keys.size(); ++i) {
+    map.InsertOrAssign(data.insert_keys[i],
+                       MakeLargeValue(static_cast<uint64_t>(i), 0x5CA7C4u));
+  }
+  AttachAdapterCounters(state, map);
   state.SetItemsProcessed(state.iterations() *
                           static_cast<int64_t>(data.insert_keys.size() * 2));
 }
@@ -464,7 +510,8 @@ const bool kRegistered = [] {
   RegisterLargeValueScratchBenchmarksForAdapter<StdLargeValueAdapter>();
   RegisterLargeValueScratchBenchmarksForAdapter<AbslLargeValueAdapter>();
   RegisterLargeValueScratchBenchmarksForAdapter<AbslNodeLargeValueAdapter>();
-  RegisterLargeValueScratchBenchmarksForAdapter<ScratchIndirectLargeValueAdapter>();
+  RegisterLargeValueScratchBenchmarksForAdapter<
+      ScratchIndirectLargeValueAdapter>();
   return true;
 }();
 

@@ -151,12 +151,20 @@ convenient.
 
 ## Extension Plan
 
-The main follow-up ideas are:
+The repo has now implemented the first serious round of measurement-focused
+extensions:
 
-- GitHub Actions CI with build, test, and benchmark smoke checks
-- benchmark regression tracking over time
-- memory and probe-length instrumentation
-- more trace-like workloads such as Zipfian or bursty patterns
+- fast CI plus full benchmark workflows
+- deterministic trace-like workloads
+- memory metrics in benchmark JSON and reports
+- structured run events plus a local dashboard
+- a baseline store and regression comparison path
+
+The next follow-up ideas are:
+
+- probe-length instrumentation
+- multi-machine benchmark history
+- richer trace families such as Zipfian or mixed-lifetime traces
 - advanced probing redesigns like Robin Hood hashing or metadata bytes
 - cloud or service wrappers only if they support the measurement story
 

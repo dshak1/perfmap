@@ -1,0 +1,39 @@
+{
+  "default": {
+    "warn_pct": 5.0,
+    "fail_pct": 12.0,
+    "enforce": false
+  },
+  "protected_benchmarks": [
+    {
+      "pattern": "^perfmap_scratch_indirect_large_value/large_value_scratch_cycle/16384$",
+      "warn_pct": 4.0,
+      "fail_pct": 8.0,
+      "enforce": true
+    },
+    {
+      "pattern": "^perfmap_scratch_indirect_large_value/large_value_scratch_cycle/65536$",
+      "warn_pct": 5.0,
+      "fail_pct": 10.0,
+      "enforce": true
+    },
+    {
+      "pattern": "^perfmap_scratch_indirect_large_value/trace_batch_metadata_enrichment$",
+      "warn_pct": 4.0,
+      "fail_pct": 8.0,
+      "enforce": true
+    },
+    {
+      "pattern": "^perfmap_scratch/trace_request_dedup_enrichment$",
+      "warn_pct": 5.0,
+      "fail_pct": 10.0,
+      "enforce": true
+    },
+    {
+      "pattern": "^perfmap_scratch/trace_graph_traversal_scratch$",
+      "warn_pct": 5.0,
+      "fail_pct": 10.0,
+      "enforce": true
+    }
+  ]
+}

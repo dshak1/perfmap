@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PerfMap Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">PerfMap Benchmark Dashboard</p>
+      <h1 id="run-title">Loading run...</h1>
+      <p id="run-meta" class="muted">Waiting for summary.json</p>
+    </div>
+    <div class="status-pill" id="run-status">pending</div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Live Status</h2>
+        <span id="current-stage" class="muted">initializing</span>
+      </div>
+      <div class="kv-grid">
+        <div><span class="label">Current Suite</span><span id="current-suite">-</span></div>
+        <div><span class="label">Current Benchmark</span><span id="current-benchmark">-</span></div>
+        <div><span class="label">Finished</span><span id="finished-at">-</span></div>
+        <div><span class="label">Preset</span><span id="run-preset">-</span></div>
+      </div>
+      <div id="artifact-links" class="links"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Suite Progress</h2>
+      </div>
+      <div id="suite-list" class="suite-list"></div>
+    </section>
+
+    <section class="panel wide">
+      <div class="panel-header">
+        <h2>Recent Completed Benchmarks</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Suite</th>
+            <th>Benchmark</th>
+            <th>Throughput</th>
+            <th>Bytes / Live Entry</th>
+            <th>Total Reserved Bytes</th>
+          </tr>
+        </thead>
+        <tbody id="recent-table"></tbody>
+      </table>
+    </section>
+
+    <section class="panel wide">
+      <div class="panel-header">
+        <h2>Regression Summary</h2>
+      </div>
+      <div id="comparison-summary" class="muted">No comparison loaded yet.</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Benchmark</th>
+            <th>Delta %</th>
+            <th>Bytes / Live Delta %</th>
+            <th>Total Reserved Delta %</th>
+          </tr>
+        </thead>
+        <tbody id="comparison-table"></tbody>
+      </table>
+    </section>
+
+    <section class="panel wide">
+      <div class="panel-header">
+        <h2>Top Results</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Suite</th>
+            <th>Benchmark</th>
+            <th>Throughput</th>
+            <th>Bytes / Live Entry</th>
+            <th>Total Reserved Bytes</th>
+          </tr>
+        </thead>
+        <tbody id="results-table"></tbody>
+      </table>
+    </section>
+
+    <section class="panel wide">
+      <div class="panel-header">
+        <h2>Event Stream</h2>
+      </div>
+      <div id="event-log" class="event-log"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

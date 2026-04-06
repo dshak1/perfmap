@@ -1,0 +1,29 @@
+{
+  "preset": "full",
+  "run_id": "local-full",
+  "source_run_dir": "results/runs/local-full",
+  "suites": [
+    {
+      "artifacts": {
+        "json": "perfmap_bench.json"
+      },
+      "filter": "^(std_unordered_map|absl_flat_hash_map|absl_node_hash_map|perfmap_balanced|perfmap_read_heavy|perfmap_space_efficient|perfmap_indirect_large_value|perfmap_scratch|perfmap_scratch_indirect_large_value)/(insert_reserved|find_hit|find_miss|mixed|large_value_find_hit|large_value_find_miss|scratch_cycle|large_value_scratch_cycle)/(4096|16384|65536)$",
+      "name": "perfmap_bench"
+    },
+    {
+      "artifacts": {
+        "json": "perfmap_trace_bench.json"
+      },
+      "filter": null,
+      "name": "perfmap_trace_bench"
+    },
+    {
+      "artifacts": {
+        "json": "perfmap_tradeoffs.json"
+      },
+      "filter": "^(BM_StdMap_MissHeavy|BM_PerfMap_MissHeavy|BM_StdMap_LargeValue_Find|BM_PerfMap_LargeValue_Find|BM_StdMap_EraseChurn|BM_PerfMap_EraseChurn)/(4096|16384)$",
+      "name": "perfmap_tradeoffs"
+    }
+  ],
+  "updated_at": "2026-04-06T09:13:54.533589+00:00"
+}

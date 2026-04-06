@@ -1,0 +1,102 @@
+name: Benchmark Regression
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 15 * * 1"
+  workflow_dispatch:
+    inputs:
+      run_name:
+        description: "Optional run directory name"
+        required: false
+        type: string
+      enforce_regressions:
+        description: "Fail the workflow when protected benchmarks regress"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  benchmark-regression:
+    runs-on: ubuntu-latest
+    env:
+      RUN_NAME: ${{ github.event.inputs.run_name || 'ci-full' }}
+      ENFORCE_REGRESSIONS: ${{ github.event.inputs.enforce_regressions != 'false' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate deterministic workload fixtures
+        run: python3 scripts/generate_workload_fixtures.py
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Run full benchmark pipeline
+        run: |
+          args=(
+            python3 scripts/run_benchmarks.py
+            --preset full
+            --build-dir build
+            --output-root results/runs
+            --run-name "$RUN_NAME"
+          )
+          if [ "$ENFORCE_REGRESSIONS" = "true" ]; then
+            args+=(--enforce-regressions)
+          fi
+          "${args[@]}"
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perfmap-full-benchmarks
+          path: results/runs/${{ env.RUN_NAME }}
+          retention-days: 14
+
+      - name: Append comparison summary to job summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          run_dir = Path("results/runs/${{ env.RUN_NAME }}")
+          summary_path = run_dir / "summary.json"
+          comparison_path = run_dir / "comparison.json"
+          lines = ["## PerfMap Benchmark Summary", ""]
+          if summary_path.exists():
+              summary = json.loads(summary_path.read_text())
+              lines.append(f"- Status: `{summary['status']}`")
+              lines.append(f"- Dashboard artifact: `{run_dir / 'dashboard' / 'index.html'}`")
+              lines.append(f"- Report artifact: `{run_dir / 'report.html'}`")
+          if comparison_path.exists():
+              comparison = json.loads(comparison_path.read_text())
+              summary = comparison["summary"]
+              lines.append(f"- Checked benchmarks: `{summary['checked']}`")
+              lines.append(f"- Warnings: `{summary['warnings']}`")
+              lines.append(f"- Failures: `{summary['failures']}`")
+              lines.append(
+                  f"- Report-only regressions: `{summary.get('report_only_regressions', 0)}`"
+              )
+          Path(os.environ["GITHUB_STEP_SUMMARY"]).write_text("\n".join(lines) + "\n")
+          PY

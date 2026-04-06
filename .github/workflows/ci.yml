@@ -18,6 +18,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate deterministic workload fixtures
+        run: python3 scripts/generate_workload_fixtures.py
+
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
@@ -27,14 +35,19 @@ jobs:
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
 
-      - name: Benchmark smoke test
+      - name: Run smoke benchmark pipeline
         run: |
-          ./build/perfmap_bench \
-            --benchmark_filter='^(std_unordered_map|perfmap_balanced)/(insert_grow|find_hit)/1024$' \
-            --benchmark_min_time=0.001s
+          python3 scripts/run_benchmarks.py \
+            --preset smoke \
+            --build-dir build \
+            --output-root results/runs \
+            --run-name ci-smoke \
+            --skip-compare
 
-      - name: Tradeoff benchmark smoke test
-        run: |
-          ./build/perfmap_tradeoffs \
-            --benchmark_filter='^(BM_StdMap_MissHeavy|BM_PerfMap_MissHeavy)/1024$' \
-            --benchmark_min_time=0.001s
+      - name: Upload smoke benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perfmap-ci-smoke
+          path: results/runs/ci-smoke
+          retention-days: 7

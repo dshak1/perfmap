@@ -144,6 +144,33 @@ This dual API is useful in a workshop because it lets you contrast:
   - implementation-agnostic contract coverage
 - scratch-map tests for the generation-based variants
 
+### Benchmark pipeline and observability layer
+
+- [`scripts/run_benchmarks.py`](../scripts/run_benchmarks.py)
+  - canonical smoke/full benchmark entrypoint
+- [`scripts/compare_benchmarks.py`](../scripts/compare_benchmarks.py)
+  - baseline comparison and regression classification
+- [`scripts/generate_benchmark_report.py`](../scripts/generate_benchmark_report.py)
+  - Markdown/HTML report generation
+- [`scripts/dashboard_server.py`](../scripts/dashboard_server.py)
+  - lightweight local server for the live/post-run dashboard
+- [`dashboard/`](../dashboard)
+  - local web UI fed by `summary.json`, `events.jsonl`, and report outputs
+
+## Memory Metrics Design
+
+The benchmark adapters now expose a `MemoryMetrics` surface used by both the
+benchmark harness and the pipeline.
+
+This split is deliberate:
+
+- PerfMap variants report exact structural metrics because the implementation
+  owns the probe table and payload storage directly.
+- baseline containers report conservative estimates and label them as such.
+
+That keeps the benchmark JSON honest while still making memory/performance
+tradeoffs visible in reports.
+
 ## Performance Analysis
 
 The repo currently supports three distinct performance stories:

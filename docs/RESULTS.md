@@ -138,11 +138,36 @@ The truthful conclusion is:
 ## Regenerating Results
 
 ```bash
-./perfmap_bench
+python3 scripts/run_benchmarks.py --preset full --build-dir build --run-name local-full --enforce-regressions
 ```
 
 For machine-readable output:
 
 ```bash
-./perfmap_bench --benchmark_out=results.json --benchmark_out_format=json
+python3 scripts/run_benchmarks.py --preset smoke --build-dir build --run-name local-smoke --skip-compare
 ```
+
+Each run directory now contains:
+
+- raw benchmark JSON
+- `summary.json`
+- `events.jsonl`
+- `report.md`
+- `report.html`
+- `dashboard/`
+
+## Memory and Workload Context
+
+The benchmark JSON now includes counters such as:
+
+- `bytes_per_live_entry`
+- `total_reserved_bytes`
+- `hot_table_bytes`
+- `payload_storage_bytes`
+
+The repo also now includes deterministic trace-like workload coverage for:
+
+- request-scoped dedup/enrichment
+- graph traversal scratch state
+- hotset phase shifts
+- batch-local large-value metadata enrichment

@@ -72,6 +72,7 @@ add_executable(perfmap_tests
   tests/scratch_hash_map_test.cc
   tests/scratch_indirect_hash_map_test.cc
   tests/hash_map_test.cc
+  tests/memory_metrics_test.cc
 )
 target_link_libraries(perfmap_tests PRIVATE
   perfmap
@@ -103,6 +104,22 @@ target_link_libraries(perfmap_tradeoffs PRIVATE
   benchmark::benchmark_main
 )
 
+add_executable(perfmap_trace_bench
+  bench/trace_workload_bench.cc
+)
+target_link_libraries(perfmap_trace_bench PRIVATE
+  perfmap
+  benchmark::benchmark
+  benchmark::benchmark_main
+)
+
+target_compile_definitions(perfmap_bench PRIVATE
+  PERFMAP_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+target_compile_definitions(perfmap_trace_bench PRIVATE
+  PERFMAP_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
 # Optimize benchmarks for release by default.
 # -march=native lets the compiler use all available instructions on this CPU.
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
@@ -112,11 +129,17 @@ if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
   target_compile_options(perfmap_tradeoffs PRIVATE
     $<$<CONFIG:Release>:-O2 -march=native>
   )
+  target_compile_options(perfmap_trace_bench PRIVATE
+    $<$<CONFIG:Release>:-O2 -march=native>
+  )
 else()
   target_compile_options(perfmap_bench PRIVATE
     $<$<CONFIG:Release>:-O2 -mcpu=native>
   )
   target_compile_options(perfmap_tradeoffs PRIVATE
+    $<$<CONFIG:Release>:-O2 -mcpu=native>
+  )
+  target_compile_options(perfmap_trace_bench PRIVATE
     $<$<CONFIG:Release>:-O2 -mcpu=native>
   )
 endif()
