@@ -26,9 +26,21 @@
 #include <string>
 #include <unordered_map>
 
+#include "benchmark_support.h"
 #include "perfmap/hash_map.h"
+#include "perfmap/map_adapters.h"
 
 #define PERFMAP_IGNORE_STATUS(expr) (void)(expr)
+
+using perfmap::benchmarks::AttachMemoryCounters;
+
+template <typename K, typename V>
+perfmap::MemoryMetrics StdUnorderedMapMetrics(
+    const std::unordered_map<K, V>& map) {
+  return perfmap::adapters::detail::MakeStdNodeLikeMetrics<K, V>(
+      map.size(), map.bucket_count(),
+      perfmap::adapters::detail::BucketBackedReservedCapacity(map));
+}
 
 // =============================================================================
 // Helpers
@@ -55,7 +67,7 @@ static std::vector<int> GenerateKeys(int count, int seed = 42) {
 // REAL-WORLD EXAMPLE: Firewall rule lookup, DNS cache, bloom-filter
 // fallback — any workload where most queries don't match.
 
-static void BM_StdMap_MissHeavy(benchmark::State& state) {
+static void BM_StdUnorderedMap_MissHeavy(benchmark::State& state) {
   const int n = static_cast<int>(state.range(0));
   auto keys = GenerateKeys(n, 42);
 
@@ -79,9 +91,10 @@ static void BM_StdMap_MissHeavy(benchmark::State& state) {
       benchmark::DoNotOptimize(map.find(key));
     }
   }
+  AttachMemoryCounters(state, StdUnorderedMapMetrics(map));
   state.SetItemsProcessed(state.iterations() * n);
 }
-BENCHMARK(BM_StdMap_MissHeavy)->Range(1 << 10, 1 << 17);
+BENCHMARK(BM_StdUnorderedMap_MissHeavy)->Range(1 << 10, 1 << 17);
 
 static void BM_PerfMap_MissHeavy(benchmark::State& state) {
   const int n = static_cast<int>(state.range(0));
@@ -104,6 +117,7 @@ static void BM_PerfMap_MissHeavy(benchmark::State& state) {
       benchmark::DoNotOptimize(map.FindPtr(key));
     }
   }
+  AttachMemoryCounters(state, map.memory_metrics());
   state.SetItemsProcessed(state.iterations() * n);
 }
 BENCHMARK(BM_PerfMap_MissHeavy)->Range(1 << 10, 1 << 17);
@@ -128,7 +142,7 @@ struct LargeValue {
   std::array<char, 256> data{};
 };
 
-static void BM_StdMap_LargeValue_Find(benchmark::State& state) {
+static void BM_StdUnorderedMap_LargeValue_Find(benchmark::State& state) {
   const int n = static_cast<int>(state.range(0));
   auto keys = GenerateKeys(n);
 
@@ -145,9 +159,10 @@ static void BM_StdMap_LargeValue_Find(benchmark::State& state) {
       benchmark::DoNotOptimize(map.find(key));
     }
   }
+  AttachMemoryCounters(state, StdUnorderedMapMetrics(map));
   state.SetItemsProcessed(state.iterations() * n);
 }
-BENCHMARK(BM_StdMap_LargeValue_Find)->Range(1 << 10, 1 << 16);
+BENCHMARK(BM_StdUnorderedMap_LargeValue_Find)->Range(1 << 10, 1 << 16);
 
 static void BM_PerfMap_LargeValue_Find(benchmark::State& state) {
   const int n = static_cast<int>(state.range(0));
@@ -165,6 +180,7 @@ static void BM_PerfMap_LargeValue_Find(benchmark::State& state) {
       benchmark::DoNotOptimize(map.FindPtr(key));
     }
   }
+  AttachMemoryCounters(state, map.memory_metrics());
   state.SetItemsProcessed(state.iterations() * n);
 }
 BENCHMARK(BM_PerfMap_LargeValue_Find)->Range(1 << 10, 1 << 16);
@@ -186,7 +202,7 @@ BENCHMARK(BM_PerfMap_LargeValue_Find)->Range(1 << 10, 1 << 16);
 // REAL-WORLD EXAMPLE: TTL-based caches, session stores, connection
 // tracking tables — anything with rapid turnover.
 
-static void BM_StdMap_EraseChurn(benchmark::State& state) {
+static void BM_StdUnorderedMap_EraseChurn(benchmark::State& state) {
   const int n = static_cast<int>(state.range(0));
   auto keys = GenerateKeys(n * 2, 42);  // 2x keys for rotation
 
@@ -208,9 +224,19 @@ static void BM_StdMap_EraseChurn(benchmark::State& state) {
     }
     benchmark::DoNotOptimize(map);
   }
+  std::unordered_map<int, int> metrics_map;
+  metrics_map.reserve(n);
+  for (int i = 0; i < n; ++i) {
+    metrics_map[keys[i]] = i;
+  }
+  for (int i = 0; i < n; ++i) {
+    metrics_map.erase(keys[i]);
+    metrics_map[keys[n + i]] = n + i;
+  }
+  AttachMemoryCounters(state, StdUnorderedMapMetrics(metrics_map));
   state.SetItemsProcessed(state.iterations() * n * 3);  // 3 ops per step
 }
-BENCHMARK(BM_StdMap_EraseChurn)->Range(1 << 10, 1 << 16);
+BENCHMARK(BM_StdUnorderedMap_EraseChurn)->Range(1 << 10, 1 << 16);
 
 static void BM_PerfMap_EraseChurn(benchmark::State& state) {
   const int n = static_cast<int>(state.range(0));
@@ -230,6 +256,15 @@ static void BM_PerfMap_EraseChurn(benchmark::State& state) {
     }
     benchmark::DoNotOptimize(map);
   }
+  perfmap::HashMap<int, int> metrics_map;
+  for (int i = 0; i < n; ++i) {
+    PERFMAP_IGNORE_STATUS(metrics_map.Insert(keys[i], i));
+  }
+  for (int i = 0; i < n; ++i) {
+    PERFMAP_IGNORE_STATUS(metrics_map.Erase(keys[i]));
+    PERFMAP_IGNORE_STATUS(metrics_map.Insert(keys[n + i], n + i));
+  }
+  AttachMemoryCounters(state, metrics_map.memory_metrics());
   state.SetItemsProcessed(state.iterations() * n * 3);
 }
 BENCHMARK(BM_PerfMap_EraseChurn)->Range(1 << 10, 1 << 16);
@@ -254,7 +289,7 @@ BENCHMARK(BM_PerfMap_EraseChurn)->Range(1 << 10, 1 << 16);
 // This is benchmarked as a "pattern" test: code that relies on
 // reference stability MUST use std::unordered_map (or store indices).
 
-static void BM_StdMap_ReferenceStability(benchmark::State& state) {
+static void BM_StdUnorderedMap_ReferenceStability(benchmark::State& state) {
   // Pattern: store pointer to value, insert more, read through pointer
   const int n = static_cast<int>(state.range(0));
 
@@ -274,9 +309,16 @@ static void BM_StdMap_ReferenceStability(benchmark::State& state) {
     int val = *ptr;
     benchmark::DoNotOptimize(val);
   }
+  std::unordered_map<int, int> metrics_map;
+  metrics_map.reserve(16);
+  metrics_map[0] = 42;
+  for (int i = 1; i < n; ++i) {
+    metrics_map[i] = i;
+  }
+  AttachMemoryCounters(state, StdUnorderedMapMetrics(metrics_map));
   state.SetItemsProcessed(state.iterations() * n);
 }
-BENCHMARK(BM_StdMap_ReferenceStability)->Range(1 << 10, 1 << 16);
+BENCHMARK(BM_StdUnorderedMap_ReferenceStability)->Range(1 << 10, 1 << 16);
 
 static void BM_PerfMap_NoReferenceStability(benchmark::State& state) {
   // Pattern: we CANNOT safely hold pointers across inserts.
@@ -296,6 +338,12 @@ static void BM_PerfMap_NoReferenceStability(benchmark::State& state) {
     const int* ptr = map.FindPtr(0);
     benchmark::DoNotOptimize(ptr ? *ptr : 0);
   }
+  perfmap::HashMap<int, int> metrics_map;
+  PERFMAP_IGNORE_STATUS(metrics_map.Insert(0, 42));
+  for (int i = 1; i < n; ++i) {
+    PERFMAP_IGNORE_STATUS(metrics_map.Insert(i, i));
+  }
+  AttachMemoryCounters(state, metrics_map.memory_metrics());
   state.SetItemsProcessed(state.iterations() * n);
 }
 BENCHMARK(BM_PerfMap_NoReferenceStability)->Range(1 << 10, 1 << 16);
@@ -325,7 +373,7 @@ static std::vector<std::string> GenerateStringKeys(int count) {
   return keys;
 }
 
-static void BM_StdMap_StringKey_Find(benchmark::State& state) {
+static void BM_StdUnorderedMap_StringKey_Find(benchmark::State& state) {
   const int n = static_cast<int>(state.range(0));
   auto keys = GenerateStringKeys(n);
 
@@ -340,9 +388,10 @@ static void BM_StdMap_StringKey_Find(benchmark::State& state) {
       benchmark::DoNotOptimize(map.find(key));
     }
   }
+  AttachMemoryCounters(state, StdUnorderedMapMetrics(map));
   state.SetItemsProcessed(state.iterations() * n);
 }
-BENCHMARK(BM_StdMap_StringKey_Find)->Range(1 << 10, 1 << 15);
+BENCHMARK(BM_StdUnorderedMap_StringKey_Find)->Range(1 << 10, 1 << 15);
 
 static void BM_PerfMap_StringKey_Find(benchmark::State& state) {
   const int n = static_cast<int>(state.range(0));
@@ -358,6 +407,7 @@ static void BM_PerfMap_StringKey_Find(benchmark::State& state) {
       benchmark::DoNotOptimize(map.FindPtr(key));
     }
   }
+  AttachMemoryCounters(state, map.memory_metrics());
   state.SetItemsProcessed(state.iterations() * n);
 }
 BENCHMARK(BM_PerfMap_StringKey_Find)->Range(1 << 10, 1 << 15);

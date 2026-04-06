@@ -67,7 +67,7 @@ PRESETS: dict[str, list[SuiteConfig]] = {
         SuiteConfig(
             name="perfmap_tradeoffs",
             binary="perfmap_tradeoffs",
-            benchmark_filter=r"^(BM_StdMap_MissHeavy|BM_PerfMap_MissHeavy)/1024$",
+            benchmark_filter=r"^(BM_StdUnorderedMap_MissHeavy|BM_PerfMap_MissHeavy)/1024$",
             min_time_seconds=0.001,
             repetitions=1,
             aggregates_only=False,
@@ -93,7 +93,7 @@ PRESETS: dict[str, list[SuiteConfig]] = {
         SuiteConfig(
             name="perfmap_tradeoffs",
             binary="perfmap_tradeoffs",
-            benchmark_filter=r"^(BM_StdMap_MissHeavy|BM_PerfMap_MissHeavy|BM_StdMap_LargeValue_Find|BM_PerfMap_LargeValue_Find|BM_StdMap_EraseChurn|BM_PerfMap_EraseChurn)/(4096|16384)$",
+            benchmark_filter=r"^(BM_StdUnorderedMap_MissHeavy|BM_PerfMap_MissHeavy|BM_StdUnorderedMap_LargeValue_Find|BM_PerfMap_LargeValue_Find|BM_StdUnorderedMap_EraseChurn|BM_PerfMap_EraseChurn)/(4096|16384)$",
             min_time_seconds=0.01,
             repetitions=5,
             aggregates_only=True,

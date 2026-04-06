@@ -8,8 +8,8 @@
     "os": "Darwin"
   },
   "preset": "full",
-  "run_id": "local-full",
-  "source_run_dir": "results/runs/local-full",
+  "run_id": "baseline-refresh",
+  "source_run_dir": "results/runs/baseline-refresh",
   "suites": [
     {
       "artifacts": {
@@ -29,9 +29,9 @@
       "artifacts": {
         "json": "perfmap_tradeoffs.json"
       },
-      "filter": "^(BM_StdMap_MissHeavy|BM_PerfMap_MissHeavy|BM_StdMap_LargeValue_Find|BM_PerfMap_LargeValue_Find|BM_StdMap_EraseChurn|BM_PerfMap_EraseChurn)/(4096|16384)$",
+      "filter": "^(BM_StdUnorderedMap_MissHeavy|BM_PerfMap_MissHeavy|BM_StdUnorderedMap_LargeValue_Find|BM_PerfMap_LargeValue_Find|BM_StdUnorderedMap_EraseChurn|BM_PerfMap_EraseChurn)/(4096|16384)$",
       "name": "perfmap_tradeoffs"
     }
   ],
-  "updated_at": "2026-04-06T09:13:54.533589+00:00"
+  "updated_at": "2026-04-06T23:06:52.068863+00:00"
 }
