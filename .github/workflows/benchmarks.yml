@@ -1,5 +1,8 @@
 name: Benchmark Regression
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches:
@@ -98,5 +101,15 @@ jobs:
               lines.append(
                   f"- Report-only regressions: `{summary.get('report_only_regressions', 0)}`"
               )
+              if not summary.get("baseline_compatible", True):
+                  lines.append(
+                      f"- Baseline compatibility: skipped (`{summary.get('baseline_skip_reason', 'unknown reason')}`)"
+                  )
+                  lines.append(
+                      f"- Current environment: `{summary.get('current_environment_label', 'n/a')}`"
+                  )
+                  lines.append(
+                      f"- Baseline environment: `{summary.get('baseline_environment_label', 'n/a')}`"
+                  )
           Path(os.environ["GITHUB_STEP_SUMMARY"]).write_text("\n".join(lines) + "\n")
           PY

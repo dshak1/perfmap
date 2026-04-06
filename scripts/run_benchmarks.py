@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -14,7 +15,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from benchmark_lib import build_report_data, compare_runs, render_html_report, render_markdown_report, utc_now_iso, write_json
+from benchmark_lib import (
+    build_report_data,
+    compare_runs,
+    environment_label,
+    render_html_report,
+    render_markdown_report,
+    utc_now_iso,
+    write_json,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -24,6 +33,7 @@ DEFAULT_THRESHOLDS = REPO_ROOT / "bench" / "baselines" / "default" / "thresholds
 BENCHMARK_ROW_RE = re.compile(
     r"^(?P<name>\S+)\s+(?P<real>\S+)\s+(?P<cpu>\S+)\s+(?P<iterations>\S+)(?P<counters>.*)$"
 )
+CMAKE_SET_RE = re.compile(r'^set\((?P<key>[A-Za-z0-9_]+)\s+"(?P<value>.*)"\)$')
 
 
 @dataclass(frozen=True)
@@ -104,6 +114,44 @@ def list_benchmarks(binary: Path, benchmark_filter: str | None) -> list[str]:
         check=True,
     )
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def parse_cmake_set_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not path.exists():
+        return values
+    for raw_line in path.read_text().splitlines():
+        line = raw_line.strip()
+        match = CMAKE_SET_RE.match(line)
+        if match:
+            values[match.group("key")] = match.group("value")
+    return values
+
+
+def compiler_metadata(build_dir: Path) -> dict[str, Any]:
+    compiler_files = sorted(build_dir.glob("CMakeFiles/*/CMakeCXXCompiler.cmake"))
+    system_files = sorted(build_dir.glob("CMakeFiles/*/CMakeSystem.cmake"))
+    compiler_values = parse_cmake_set_file(compiler_files[0]) if compiler_files else {}
+    system_values = parse_cmake_set_file(system_files[0]) if system_files else {}
+    compiler_version = compiler_values.get("CMAKE_CXX_COMPILER_VERSION")
+    compiler_major = None
+    if compiler_version:
+        major_token = compiler_version.split(".", 1)[0]
+        if major_token.isdigit():
+            compiler_major = int(major_token)
+    return {
+        "os": system_values.get("CMAKE_SYSTEM_NAME") or platform.system(),
+        "arch": system_values.get("CMAKE_SYSTEM_PROCESSOR") or platform.machine(),
+        "compiler_id": compiler_values.get("CMAKE_CXX_COMPILER_ID"),
+        "compiler_version": compiler_version,
+        "compiler_version_major": compiler_major,
+    }
+
+
+def collect_environment(build_dir: Path) -> dict[str, Any]:
+    environment = compiler_metadata(build_dir)
+    environment["label"] = environment_label(environment)
+    return environment
 
 
 def parse_counter_blob(blob: str) -> dict[str, float]:
@@ -291,6 +339,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
     copy_dashboard_assets(run_dir)
     events_path = run_dir / "events.jsonl"
+    environment = collect_environment(build_dir)
 
     suites = PRESETS[args.preset]
     manifest = {
@@ -298,6 +347,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
         "preset": args.preset,
         "generated_at": utc_now_iso(),
         "build_dir": str(build_dir),
+        "environment": environment,
         "suites": [],
     }
     summary = {
@@ -308,6 +358,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
         "current_stage": "initializing",
         "current_suite": None,
         "current_benchmark": None,
+        "environment": environment,
         "recent_completed_benchmarks": [],
         "suites": [],
         "artifacts": {
@@ -330,7 +381,15 @@ def run_pipeline(args: argparse.Namespace) -> int:
         manifest["suites"].append(suite_summary)
     update_summary(run_dir / "summary.json", summary)
     write_json(run_dir / "manifest.json", manifest)
-    emit_event(events_path, {"event": "run_started", "run_id": run_id, "preset": args.preset})
+    emit_event(
+        events_path,
+        {
+            "event": "run_started",
+            "run_id": run_id,
+            "preset": args.preset,
+            "environment": environment,
+        },
+    )
 
     exit_code = 0
     try:

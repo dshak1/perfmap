@@ -87,6 +87,11 @@ Full run with baseline comparison:
 python3 scripts/run_benchmarks.py --preset full --build-dir build --run-name local-full --enforce-regressions
 ```
 
+Regression enforcement only applies when the run and the stored baseline come
+from a compatible environment (OS, architecture, compiler family, compiler
+major version). Cross-machine comparisons are recorded as skipped instead of
+failing CI with fake regressions.
+
 Promote a run to the checked-in baseline:
 
 ```bash

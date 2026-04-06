@@ -23,8 +23,8 @@ Purpose:
 
 - main-branch and scheduled benchmark runs
 - repeated benchmarks with aggregate output
-- baseline comparison
-- regression enforcement on protected benchmarks
+- baseline comparison when the checked-in baseline is compatible with the runner
+- regression enforcement on protected benchmarks only when that compatibility check passes
 
 Run:
 
@@ -54,6 +54,19 @@ finishes.
 
 The checked-in baseline lives in `bench/baselines/default/`.
 
+Baseline enforcement is environment-sensitive. Each manifest now records:
+
+- operating system
+- architecture
+- compiler family
+- compiler major version
+
+PerfMap only enforces regressions when the current run and the baseline come
+from a compatible environment. A macOS AppleClang baseline is not allowed to
+gate a Linux GCC run, and vice versa. When the environments do not match, the
+pipeline still publishes artifacts and a comparison record, but it marks the
+comparison as skipped instead of producing a fake regression failure.
+
 To update it intentionally:
 
 ```bash
@@ -64,6 +77,10 @@ python3 scripts/update_baseline.py \
 
 That copies suite JSON outputs and writes a new baseline manifest. The
 thresholds remain in `bench/baselines/default/thresholds.json`.
+
+When you want CI enforcement on a specific runner class, refresh the baseline
+from that same class of machine instead of promoting numbers from a different
+OS/compiler stack.
 
 ## Regression Logic
 

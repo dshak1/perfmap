@@ -32,6 +32,7 @@ def main() -> int:
         "source_run_dir": str(run_dir),
         "updated_at": utc_now_iso(),
         "preset": manifest.get("preset"),
+        "environment": manifest.get("environment"),
         "suites": [],
     }
     for suite in manifest.get("suites", []):

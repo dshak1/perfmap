@@ -28,6 +28,10 @@ function formatNumber(value) {
   return Number(value).toFixed(2);
 }
 
+function environmentLabel(environment) {
+  return environment?.label || "unknown environment";
+}
+
 function renderArtifactLinks(artifacts) {
   const container = document.getElementById("artifact-links");
   container.innerHTML = "";
@@ -117,6 +121,13 @@ function renderComparison(comparison) {
     summary.textContent = "No comparison loaded yet.";
     return;
   }
+  if (comparison.summary.baseline_compatible === false) {
+    summary.textContent =
+      `Comparison skipped: ${comparison.summary.baseline_skip_reason}. ` +
+      `Current: ${comparison.summary.current_environment_label || "n/a"}. ` +
+      `Baseline: ${comparison.summary.baseline_environment_label || "n/a"}.`;
+    return;
+  }
   summary.textContent = `Checked ${comparison.summary.checked}, warnings ${comparison.summary.warnings}, failures ${comparison.summary.failures}, missing baseline ${comparison.summary.missing_baseline}, report-only regressions ${comparison.summary.report_only_regressions || 0}.`;
   (comparison.top_regressions || []).forEach((row) => {
     const tr = document.createElement("tr");
@@ -168,7 +179,8 @@ async function refresh() {
     ]);
 
     document.getElementById("run-title").textContent = `Run ${summary.run_id}`;
-    document.getElementById("run-meta").textContent = summary.generated_at || "n/a";
+    document.getElementById("run-meta").textContent =
+      `${summary.generated_at || "n/a"} | ${environmentLabel(summary.environment)}`;
     document.getElementById("run-status").textContent = summary.status;
     document.getElementById("current-stage").textContent = summary.current_stage || "-";
     document.getElementById("current-suite").textContent = summary.current_suite || "-";

@@ -1,4 +1,12 @@
 {
+  "environment": {
+    "arch": "arm64",
+    "compiler_id": "AppleClang",
+    "compiler_version": "17.0.0.17000603",
+    "compiler_version_major": 17,
+    "label": "Darwin/arm64 | AppleClang 17",
+    "os": "Darwin"
+  },
   "preset": "full",
   "run_id": "local-full",
   "source_run_dir": "results/runs/local-full",

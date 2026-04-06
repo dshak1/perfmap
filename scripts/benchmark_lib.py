@@ -28,6 +28,7 @@ STANDARD_BENCHMARK_FIELDS = {
 }
 
 AGGREGATE_SUFFIXES = ("_mean", "_median", "_stddev", "_cv")
+ENVIRONMENT_COMPATIBILITY_KEYS = ("os", "arch", "compiler_id", "compiler_version_major")
 
 
 def utc_now_iso() -> str:
@@ -100,6 +101,81 @@ def load_thresholds(path: Path) -> dict[str, Any]:
     return read_json(path)
 
 
+def environment_label(environment: dict[str, Any] | None) -> str:
+    if not environment:
+        return "unknown environment"
+    os_name = environment.get("os", "unknown-os")
+    arch = environment.get("arch", "unknown-arch")
+    compiler = environment.get("compiler_id")
+    compiler_version = environment.get("compiler_version_major") or environment.get(
+        "compiler_version"
+    )
+    label = f"{os_name}/{arch}"
+    if compiler:
+        label += f" | {compiler}"
+        if compiler_version:
+            label += f" {compiler_version}"
+    return label
+
+
+def compare_environments(
+    current_environment: dict[str, Any] | None,
+    baseline_environment: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not current_environment:
+        return {
+            "compatible": False,
+            "reason": "current run manifest is missing environment metadata",
+            "current": current_environment or {},
+            "baseline": baseline_environment or {},
+            "mismatches": [],
+        }
+    if not baseline_environment:
+        return {
+            "compatible": False,
+            "reason": "baseline manifest is missing environment metadata",
+            "current": current_environment,
+            "baseline": baseline_environment or {},
+            "mismatches": [],
+        }
+
+    mismatches: list[dict[str, Any]] = []
+    for key in ENVIRONMENT_COMPATIBILITY_KEYS:
+        current_value = current_environment.get(key)
+        baseline_value = baseline_environment.get(key)
+        if current_value is None or baseline_value is None:
+            continue
+        if current_value != baseline_value:
+            mismatches.append(
+                {
+                    "field": key,
+                    "current": current_value,
+                    "baseline": baseline_value,
+                }
+            )
+
+    if mismatches:
+        mismatch_summary = ", ".join(
+            f"{entry['field']}: {entry['baseline']} -> {entry['current']}"
+            for entry in mismatches
+        )
+        return {
+            "compatible": False,
+            "reason": f"incompatible runner/compiler baseline ({mismatch_summary})",
+            "current": current_environment,
+            "baseline": baseline_environment,
+            "mismatches": mismatches,
+        }
+
+    return {
+        "compatible": True,
+        "reason": None,
+        "current": current_environment,
+        "baseline": baseline_environment,
+        "mismatches": [],
+    }
+
+
 def thresholds_for_benchmark(name: str, thresholds: dict[str, Any]) -> dict[str, Any]:
     default = thresholds.get(
         "default", {"warn_pct": 5.0, "fail_pct": 12.0, "enforce": False}
@@ -142,6 +218,10 @@ def compare_runs(
     current_rows = load_run_rows(current_manifest, current_root)
     baseline_rows = load_run_rows(baseline_manifest, baseline_root)
     thresholds = load_thresholds(thresholds_path)
+    compatibility = compare_environments(
+        current_manifest.get("environment"),
+        baseline_manifest.get("environment"),
+    )
 
     comparisons: list[dict[str, Any]] = []
     checked = 0
@@ -149,6 +229,33 @@ def compare_runs(
     fails = 0
     missing_baseline = 0
     report_only = 0
+
+    if not compatibility["compatible"]:
+        return {
+            "generated_at": utc_now_iso(),
+            "current_manifest": str(current_manifest_path),
+            "baseline_manifest": str(baseline_manifest_path),
+            "thresholds": str(thresholds_path),
+            "environment_compatibility": compatibility,
+            "summary": {
+                "checked": 0,
+                "warnings": 0,
+                "failures": 0,
+                "missing_baseline": 0,
+                "report_only_regressions": 0,
+                "baseline_compatible": False,
+                "baseline_skip_reason": compatibility["reason"],
+                "current_environment_label": environment_label(
+                    compatibility["current"]
+                ),
+                "baseline_environment_label": environment_label(
+                    compatibility["baseline"]
+                ),
+            },
+            "comparisons": [],
+            "top_regressions": [],
+            "top_improvements": [],
+        }
 
     for suite_name, rows in current_rows.items():
         baseline_index = {
@@ -252,12 +359,21 @@ def compare_runs(
         "current_manifest": str(current_manifest_path),
         "baseline_manifest": str(baseline_manifest_path),
         "thresholds": str(thresholds_path),
+        "environment_compatibility": compatibility,
         "summary": {
             "checked": checked,
             "warnings": warns,
             "failures": fails,
             "missing_baseline": missing_baseline,
             "report_only_regressions": report_only,
+            "baseline_compatible": True,
+            "baseline_skip_reason": None,
+            "current_environment_label": environment_label(
+                current_manifest.get("environment")
+            ),
+            "baseline_environment_label": environment_label(
+                baseline_manifest.get("environment")
+            ),
         },
         "comparisons": comparisons,
         "top_regressions": regressions[:15],
@@ -296,6 +412,7 @@ def build_report_data(
         "generated_at": utc_now_iso(),
         "run_id": manifest.get("run_id"),
         "preset": manifest.get("preset"),
+        "environment": manifest.get("environment"),
         "suite_cards": [
             suite_card(suite, rows_by_suite.get(suite["name"], []))
             for suite in manifest.get("suites", [])
@@ -327,6 +444,7 @@ def render_markdown_report(report_data: dict[str, Any]) -> str:
         f"- Run ID: `{report_data['run_id']}`",
         f"- Preset: `{report_data['preset']}`",
         f"- Generated: `{report_data['generated_at']}`",
+        f"- Environment: `{environment_label(report_data.get('environment'))}`",
         "",
         "## Suite Summary",
         "",
@@ -352,6 +470,14 @@ def render_markdown_report(report_data: dict[str, Any]) -> str:
                 f"- Report-only regressions: {summary.get('report_only_regressions', 0)}",
             ]
         )
+        if not summary.get("baseline_compatible", True):
+            lines.extend(
+                [
+                    f"- Baseline compatibility: skipped (`{summary['baseline_skip_reason']}`)",
+                    f"- Current environment: `{summary.get('current_environment_label', 'n/a')}`",
+                    f"- Baseline environment: `{summary.get('baseline_environment_label', 'n/a')}`",
+                ]
+            )
 
     lines.extend(
         [
@@ -393,13 +519,21 @@ def render_html_report(report_data: dict[str, Any]) -> str:
     comparison = report_data.get("comparison_summary")
     comparison_html = ""
     if comparison:
+        extra = ""
+        if not comparison.get("baseline_compatible", True):
+            extra = (
+                f"<p>Baseline compatibility: skipped ({comparison['baseline_skip_reason']})<br>"
+                f"Current environment: {comparison.get('current_environment_label', 'n/a')}<br>"
+                f"Baseline environment: {comparison.get('baseline_environment_label', 'n/a')}</p>"
+            )
         comparison_html = (
             "<section><h2>Regression Summary</h2>"
             f"<p>Checked: {comparison['checked']} | "
             f"Warnings: {comparison['warnings']} | "
             f"Failures: {comparison['failures']} | "
             f"Missing baseline: {comparison['missing_baseline']} | "
-            f"Report-only regressions: {comparison.get('report_only_regressions', 0)}</p></section>"
+            f"Report-only regressions: {comparison.get('report_only_regressions', 0)}</p>"
+            f"{extra}</section>"
         )
 
     return f"""<!doctype html>
@@ -420,7 +554,7 @@ def render_html_report(report_data: dict[str, Any]) -> str:
 <body>
   <div class="card">
     <h1>PerfMap Benchmark Report</h1>
-    <p class="meta">Run ID: {report_data['run_id']} | Preset: {report_data['preset']} | Generated: {report_data['generated_at']}</p>
+    <p class="meta">Run ID: {report_data['run_id']} | Preset: {report_data['preset']} | Generated: {report_data['generated_at']} | Environment: {environment_label(report_data.get('environment'))}</p>
   </div>
   <section>
     <h2>Suite Summary</h2>

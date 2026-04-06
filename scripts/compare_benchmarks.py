@@ -30,13 +30,16 @@ def main() -> int:
     write_json(Path(args.output), payload)
     summary = payload["summary"]
     print(
-        "checked={checked} warnings={warnings} failures={failures} missing_baseline={missing}".format(
+        "checked={checked} warnings={warnings} failures={failures} missing_baseline={missing} baseline_compatible={compatible}".format(
             checked=summary["checked"],
             warnings=summary["warnings"],
             failures=summary["failures"],
             missing=summary["missing_baseline"],
+            compatible=summary.get("baseline_compatible", True),
         )
     )
+    if not summary.get("baseline_compatible", True):
+        print(f"baseline_skip_reason={summary.get('baseline_skip_reason')}")
     return 1 if summary["failures"] else 0
 
 
