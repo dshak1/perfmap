@@ -168,12 +168,31 @@ Workflows:
 - [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
 - [`.github/workflows/benchmarks.yml`](./.github/workflows/benchmarks.yml)
 
+## GitHub Custom Agents
+
+This repo includes repository-level GitHub custom agents under
+`.github/agents/`:
+
+- `benchmark-maintainer`
+  - benchmark naming, baselines, dashboard, and measurement-pipeline work
+- `ci-sheriff`
+  - GitHub Actions, build/test automation, and artifact/debugging work
+- `docs-workshop`
+  - README, docs, workshop deck/script, and teaching/demo consistency work
+
+These are meant for bounded repo-maintenance tasks. They are useful for CI
+repair, docs sync, and benchmark-pipeline chores. They should not be trusted to
+make unsupervised performance claims or silently rewrite the benchmark story.
+
 ## Project Structure
 
 ```text
 perfmap/
 ├── CMakeLists.txt
 ├── README.md
+├── .github/
+│   ├── workflows/
+│   └── agents/
 ├── include/perfmap/
 │   ├── slot.h
 │   ├── hash_map.h
