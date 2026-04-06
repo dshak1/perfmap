@@ -130,8 +130,14 @@ has a structural advantage.
 To rebuild the `.pptx` deck:
 
 ```bash
+python3 -m pip install -r workshop/requirements.txt
 ./workshop/build_deck.sh
 ```
+
+The workshop asset generator depends on:
+
+- [`workshop/requirements.txt`](./workshop/requirements.txt)
+- `pandoc`
 
 ## Dependencies
 
