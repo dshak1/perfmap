@@ -181,7 +181,9 @@ async function refresh() {
     document.getElementById("run-title").textContent = `Run ${summary.run_id}`;
     document.getElementById("run-meta").textContent =
       `${summary.generated_at || "n/a"} | ${environmentLabel(summary.environment)}`;
-    document.getElementById("run-status").textContent = summary.status;
+    const runStatus = document.getElementById("run-status");
+    runStatus.textContent = summary.status;
+    runStatus.dataset.status = summary.status || "unknown";
     document.getElementById("current-stage").textContent = summary.current_stage || "-";
     document.getElementById("current-suite").textContent = summary.current_suite || "-";
     document.getElementById("current-benchmark").textContent = summary.current_benchmark || "-";
